@@ -11,33 +11,33 @@ const databaseId = process.env.DATABASE_ID;
 
 const notion = new Client({auth: NOTION_KEY, logLevel: LogLevel.WARN});
 
-const update_notion_page = async (page_info, obj) => {
+async function updateNotionPage(page_info, obj) {
   const pageId = page_info.id;
   try {
-    const res = await retry(async () => {
+    await retry(async () => {
       return await notion.pages.update({
         page_id: pageId,
         properties: getPropertiesFromInfo(obj),
       });
     }, null, {retriesMax: 4, interval: 1000, exponential: true, factor: 3, jitter: 100});
-    console.log(res); // output : OK
   } catch (err) {
+    console.error(err);
     console.error('The function execution failed !');
   }
 };
 
-const page_work = async (one) => {
+async function pageWork(one) {
   const prop = one.properties;
   const page_url = prop['条目链接'].url;
   const douban_info = await getMovieInfo(page_url);
   if (douban_info) {
-    await update_notion_page(one, douban_info);
+    await updateNotionPage(one, douban_info);
   } else {
     console.log('not get page info for %s', page_url);
   }
 };
 
-const getNotionDBList = async (start_cursor) => {
+async function getNotionDBList(start_cursor) {
   const query_obj = {
     database_id: databaseId,
     page_size: 30,
@@ -81,12 +81,11 @@ function getCountry($) {
 
 function getReleaseDate($) {
   let dd = '';
-  $('#info>span').each(function(i, el) {
+  $('#info>span').each(function() {
     if ($(this).attr('property') == 'v:initialReleaseDate') {
       res = $(this).text();
       res = res.replace(/\(.*\)/i, '');
-      // only year
-      if (res.length == 4) {
+      if (res.length == 4) { // only year
         res = res + '-01-01';
       }
       if (dd == '') {
@@ -104,7 +103,7 @@ function getReleaseDate($) {
 function getTypeArr($) {
   const type_arr = [];
   let flag = false;
-  $('#info>span').each(function(i, el) {
+  $('#info>span').each(function() {
     const n = $(this).text();
     if (n == '类型:') {
       flag = true;
@@ -122,7 +121,7 @@ function getTypeArr($) {
 
 function getMeta($) {
   const res = {};
-  $('meta').each(function(i, el) {
+  $('meta').each(function() {
     const prop = $(this).attr('property');
     if (prop == 'video:duration') {
       res.seconds = parseInt($(this).attr('content'));
@@ -222,12 +221,14 @@ function getPropertiesFromInfo(Info) {
   };
 }
 
-const main = async () => {
+async function main() {
   let cursor;
   while (true) {
     const list = await getNotionDBList(cursor);
-    await Promise.map(list.results, page_work, {concurrency: 10});
-    console.log('batch done');
+    const cnt = list.results.length;
+    console.log('get notion db list %d', cnt);
+    await Promise.map(list.results, pageWork, {concurrency: 10});
+    console.log('batch done %d', cnt);
     if (list.has_more) {
       cursor = list.next_cursor;
       console.log('now cursor %s', cursor);
@@ -235,6 +236,7 @@ const main = async () => {
       break;
     }
   }
+  console.log('finish all');
 };
 
 main();
