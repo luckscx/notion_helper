@@ -4,10 +4,10 @@ const superagent = require('superagent');
 const Promise = require('bluebird');
 const retry = require('async-await-retry');
 const moment = require('moment');
+const process = require('process');
 
-
-const NOTION_KEY = '';
-const databaseId = '';
+const NOTION_KEY = process.env.NOTION_KEY;
+const databaseId = process.env.DATABASE_ID;
 
 const notion = new Client({auth: NOTION_KEY, logLevel: LogLevel.WARN});
 
@@ -40,13 +40,13 @@ const page_work = async (one) => {
 const getNotionDBList = async (start_cursor) => {
   const query_obj = {
     database_id: databaseId,
-    page_size: 20,
+    page_size: 30,
     filter:
     {
       'and': [
         {
-          'property': '海报',
-          'files': {
+          'property': '制片国家',
+          'multi_select': {
             'is_empty': true,
           },
         }],
@@ -67,7 +67,6 @@ const getNotionDBList = async (start_cursor) => {
 
 function getCountry($) {
   const text = $('#info').text();
-  console.log(text);
   const reg = /制片国家\/地区: (.*)/i;
   const res = text.match(reg);
   if (res) {
@@ -163,7 +162,6 @@ async function getMovieInfo(url) {
     console.log(info);
     return info;
   } catch (error) {
-    console.log(error);
     console.log('load url error %s', url);
     return null;
   }
@@ -228,7 +226,7 @@ const main = async () => {
   let cursor;
   while (true) {
     const list = await getNotionDBList(cursor);
-    await Promise.map(list.results, page_work, {concurrency: 5});
+    await Promise.map(list.results, page_work, {concurrency: 10});
     console.log('batch done');
     if (list.has_more) {
       cursor = list.next_cursor;
