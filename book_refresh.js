@@ -15,17 +15,17 @@ const notion = new Client({auth: NOTION_KEY, logLevel: LogLevel.WARN});
 async function getNotionDBList(start_cursor) {
   const query_obj = {
     database_id: databaseId,
-    page_size: 1,
+    page_size: 5,
     filter:
-    {
-      'and': [
-        {
-          'property': '原书名',
-          'rich_text': {
-            'is_empty': true,
-          },
-        }],
-    },
+     {
+       'and': [
+         {
+           'property': '原书名',
+           'rich_text': {
+             'is_empty': true,
+           },
+         }],
+     },
     sorts: [
       {
         property: 'ISBN',
@@ -45,11 +45,14 @@ async function searchBook(key) {
     return null;
   }
   const info_url = `http://127.0.0.1:8085/book/list?key=${encodeURI(key)}`;
-  console.log(info_url);
   try {
     const res = await superagent.get(info_url);
     const json = res.body;
-    return json.data[0].cover_link;
+    console.log(json);
+    if (json && json.data[0]) {
+      return json.data[0].cover_link;
+    }
+    return null;
   } catch (error) {
     console.log('load url error %s', info_url);
     console.log(error);
@@ -88,13 +91,13 @@ function getPropertiesFromInfo(Info) {
   }
   const page_num = parseInt(Info['页数']);
   return {
-    'ISBN': {
-      title: [{type: 'text', text: {content: Info.ISBN}}],
-    },
     '书名': {
+      title: [{type: 'text', text: {content: Info.title}}],
+    },
+    'ISBN': {
       'rich_text': [{
         'type': 'text',
-        'text': {content: Info.title},
+        'text': {content: Info.ISBN},
       }],
     },
     '原书名': {
@@ -173,12 +176,12 @@ async function updateNotionPage(page_info, obj) {
 
 async function pageWork(one) {
   const prop = one.properties;
-  console.log(prop);
-  const key = prop['ISBN'].title[0].plain_text;
+  let key = prop['书名'].title[0].plain_text;
 
+  key = key.replace(/-/g, '');
   const page_url = await searchBook(key);
   if (!page_url) {
-    console.log('search fail %s', isbn_num);
+    console.log('search fail fail key %s', key);
     return;
   }
 

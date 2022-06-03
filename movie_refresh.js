@@ -40,12 +40,12 @@ async function pageWork(one) {
 async function getNotionDBList(start_cursor) {
   const query_obj = {
     database_id: databaseId,
-    page_size: 30,
+    page_size: 10,
     filter:
     {
       'and': [
         {
-          'property': '制片国家',
+          'property': '导演',
           'multi_select': {
             'is_empty': true,
           },
@@ -136,6 +136,13 @@ function getMeta($) {
   return res;
 };
 
+const getDirector = ($) => {
+  const director = $('#info>span').eq('0').text();
+  let arr = director.split(':');
+  arr = arr[1].split('/');
+  return arr;
+};
+
 async function getMovieInfo(url) {
   if (!url) {
     return null;
@@ -152,7 +159,7 @@ async function getMovieInfo(url) {
       picurl: $('#mainpic img').attr('src'), // 图片
       grade: $('.rating_num').text(), // 评分
       rating_people: parseInt($('.rating_people span').text()), // 影评数
-      director: $('#info>span').eq('0').find('a').text(), // 导演
+      director: getDirector($),
       type: getTypeArr($),
       seconds: meta_info['seconds'],
       init_date: getReleaseDate($),
@@ -189,9 +196,11 @@ function getPropertiesFromInfo(Info) {
       'number': seconds,
     },
     '导演': {
-      'rich_text': [{
-        text: {content: director},
-      }],
+      'multi_select': director.map((name) => {
+        return {
+          name: name,
+        };
+      }),
     },
     '制片国家': {
       'multi_select': country.map((name) => {
