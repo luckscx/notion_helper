@@ -18,10 +18,15 @@ async function getNotionDBList(start_cursor) {
     page_size: 5,
     filter:
      {
-       'and': [
+       'or': [
          {
            'property': '原书名',
            'rich_text': {
+             'is_empty': true,
+           },
+         }, {
+           'property': '出版社',
+           'select': {
              'is_empty': true,
            },
          }],
