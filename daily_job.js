@@ -1,118 +1,75 @@
 const {Client, LogLevel} = require('@notionhq/client');
 const moment = require('moment');
 const process = require('process');
+const retry = require('async-await-retry');
 
 const NOTION_KEY = process.env.NOTION_KEY;
 const databaseId = process.env.DATABASE_ID;
 
-const notion = new Client({auth: NOTION_KEY, logLevel: LogLevel.WARN});
+const notion = new Client({auth: NOTION_KEY, logLevel: LogLevel.INFO});
 
-const target_day = moment().add(1, 'days').format('YYYY-MM-DD');
-
-async function getBlockChilds(page_id) {
-  const response = await notion.blocks.children.list({
-    block_id: page_id,
-    page_size: 100,
-  });
-
-  const list = response.results;
-  for (const item of list) {
-    if (item.has_children) {
-      if (item.type == 'column_list') {
-        item.column_list.children = await getBlockChilds(item.id);
-      }
-      if (item.type == 'column') {
-        item.column.children = await getBlockChilds(item.id);
-      }
-    }
+function getTodayProperty() {
+  let target_day = moment();
+  if (target_day.day() == 6) {
+    target_day = target_day.add(1, 'days');
   }
-  console.log(list);
-  return list;
-}
-
-function makeNewPage(old_info) {
-  const title = moment(target_day).format('MM-DD (ddd)');
-  const props = old_info.properties;
-  const new_props = {
+  const name_title = target_day.format('日报 MM.DD');
+  const day_str = target_day.format('YYYY-MM-DD');
+  const obj = {
     'Name': {
-      type: 'title',
-      title: [{type: 'text', text: {content: title}}],
+      title: [{type: 'text', text: {content: name_title}}],
     },
     '日期': {
-      type: 'date',
-      date: {
-        start: target_day,
+      'date': {
+        start: day_str,
       },
     },
-    '所属周': {
-      type: 'relation',
-      relation: props['所属周'].relation,
-    },
   };
-  return new_props;
+  return obj;
 }
 
-
-async function addNotionPage(old_page) {
-  const old_content = await getBlockChilds(old_page.id);
-  const new_blocks = old_content.filter((o) => {
-    console.log(o);
-    if (o.child_database) {
-      return false;
-    }
-    return true;
-  }).map((one) => {
-    delete one.id;
-    delete one.created_time;
-    delete one.last_edited_time;
-    delete one.created_by;
-    delete one.archived;
-    return one;
-  });
-  console.log(new_blocks);
+async function updateNotionPage(page_info) {
+  console.log(page_info);
+  const pageId = page_info.id;
   try {
-    await notion.pages.create({
-      parent: {database_id: databaseId},
-      properties: makeNewPage(old_page),
-      cover: old_page.cover,
-      icon: old_page.icon,
-      children: new_blocks,
-    });
-    console.log('added new day page success');
-    return true;
+    await retry(async () => {
+      return await notion.pages.update({
+        page_id: pageId,
+        properties: getTodayProperty(),
+      });
+    }, null, {retriesMax: 1, interval: 1000, exponential: true, factor: 3, jitter: 100});
   } catch (err) {
-    console.error(err.body);
+    console.error(err);
     console.error('The function execution failed !');
-    return false;
   }
 };
 
 async function getCurrentPage() {
   const query_obj = {
     database_id: databaseId,
-    page_size: 1,
-    filter:
-    {
-      'and': [
-        {
-          'property': '日期',
-          'date': {
-            // 'equals': moment().format('YYYY-MM-DD'),
-            'equals': target_day,
-          },
-        }],
-    },
+    page_size: 2,
+    sorts: [
+      {
+        property: 'CreateTime',
+        direction: 'descending',
+      },
+    ],
   };
   const response = await notion.databases.query(query_obj);
   return response;
 };
 
+const getPageTitle = (page) => {
+  return page.properties['Name']['title'][0];
+};
+
+// 拿到最新的两个页面，修改其中一天的日期属性
 async function main() {
   let cursor;
   const resp = await getCurrentPage(cursor);
   const cnt = resp.results.length;
-  if (cnt == 1) {
-    await addNotionPage(resp.results[0]);
+  if (cnt == 2 && getPageTitle(resp.results[0]) == getPageTitle(resp.results[0])) {
+    await updateNotionPage(resp.results[1]);
   }
 };
 

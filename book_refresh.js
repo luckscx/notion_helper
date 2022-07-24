@@ -83,8 +83,12 @@ async function getBookInfo(url) {
 function getPropertiesFromInfo(Info) {
   const rating = parseFloat(Info.rating);
   const rating_user = parseInt(Info.rating_user);
-  let pub_date = Info['出版年'];
-  pub_date = moment(pub_date, 'YYYY-mm-dd').format('YYYY-MM-DD');
+  const pub_date = Info['出版年'];
+  let formate_date = moment(pub_date, 'YYYY-mm-dd').format('YYYY-MM-DD');
+  if (formate_date == 'Invalid date') {
+    formate_date = moment(pub_date, 'YYYY年mm月').format('YYYY-MM-DD');
+  }
+  console.log(pub_date, formate_date);
   const author = Info['作者'].split('/');
   let trans = [];
   if (Info['译者']) {
@@ -95,7 +99,7 @@ function getPropertiesFromInfo(Info) {
     ori_name = Info.title;
   }
   const page_num = parseInt(Info['页数']);
-  return {
+  const obj = {
     '书名': {
       title: [{type: 'text', text: {content: Info.title}}],
     },
@@ -122,7 +126,7 @@ function getPropertiesFromInfo(Info) {
     },
     '出版时间': {
       'date': {
-        start: pub_date,
+        start: formate_date,
       },
     },
     '出版社': {
@@ -160,6 +164,7 @@ function getPropertiesFromInfo(Info) {
       ],
     },
   };
+  return obj;
 }
 
 async function updateNotionPage(page_info, obj) {
