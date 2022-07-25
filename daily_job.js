@@ -42,7 +42,7 @@ async function updateNotionPage(page_info) {
     console.error(err);
     console.error('The function execution failed !');
   }
-};
+}
 
 async function getCurrentPage() {
   const query_obj = {
@@ -57,7 +57,7 @@ async function getCurrentPage() {
   };
   const response = await notion.databases.query(query_obj);
   return response;
-};
+}
 
 const getPageTitle = (page) => {
   return page.properties['Name']['title'][0];
@@ -71,6 +71,6 @@ async function main() {
   if (cnt == 2 && getPageTitle(resp.results[0]) == getPageTitle(resp.results[0])) {
     await updateNotionPage(resp.results[1]);
   }
-};
+}
 
 main();

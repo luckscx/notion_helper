@@ -61,12 +61,12 @@ async function addNotionPage(idx) {
     console.error('The function execution failed !');
     return false;
   }
-};
+}
 
 async function main() {
   for (let i = 0; i < 30; ++i) {
     await addNotionPage(i);
   }
-};
+}
 
 main();

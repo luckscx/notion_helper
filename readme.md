@@ -8,8 +8,11 @@ nodejs脚本
 - movie_refresh.js
 基于豆瓣电影详情页 刷新表格
 
-- book_refresh.sh
+- book_refresh.js
 基于豆瓣书籍详情页 刷新notion表格
-需搭配 douban_api 库使用
+需搭配 douban_api  库使用
+ 
+- daily_job.js
+日报页面复制后刷新标题内容
 
 

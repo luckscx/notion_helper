@@ -37,7 +37,7 @@ async function addNotionPage() {
     console.error(err);
     console.error('The function execution failed !');
   }
-};
+}
 
 async function getCurrentPage() {
   const query_obj = {
@@ -56,7 +56,7 @@ async function getCurrentPage() {
   };
   const response = await notion.databases.query(query_obj);
   return response;
-};
+}
 
 async function main() {
   let cursor;
@@ -68,6 +68,6 @@ async function main() {
   }
   await addNotionPage();
   console.log('added new day page success');
-};
+}
 
 main();

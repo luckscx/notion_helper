@@ -11,6 +11,7 @@
     "rules": {
         "no-invalid-this" : "off",
         "require-jsdoc" : "off",
+        "linebreak-style" : "off",
         "indent": ["error", 2],
         "max-len": ["error", { "code": 100 }],
         "camelcase": "off"

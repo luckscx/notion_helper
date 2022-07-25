@@ -24,7 +24,7 @@ async function updateNotionPage(page_info, obj) {
     console.error(err);
     console.error('The function execution failed !');
   }
-};
+}
 
 async function pageWork(one) {
   const prop = one.properties;
@@ -35,7 +35,7 @@ async function pageWork(one) {
   } else {
     console.log('not get page info for %s', page_url);
   }
-};
+}
 
 async function getNotionDBList(start_cursor) {
   const query_obj = {
@@ -63,7 +63,7 @@ async function getNotionDBList(start_cursor) {
   }
   const response = await notion.databases.query(query_obj);
   return response;
-};
+}
 
 function getCountry($) {
   const text = $('#info').text();
@@ -77,7 +77,7 @@ function getCountry($) {
     return country;
   }
   return [];
-};
+}
 
 function getReleaseDate($) {
   let dd = '';
@@ -97,7 +97,7 @@ function getReleaseDate($) {
     }
   });
   return dd;
-};
+}
 
 
 function getTypeArr($) {
@@ -117,7 +117,7 @@ function getTypeArr($) {
     }
   });
   return type_arr;
-};
+}
 
 function getMeta($) {
   const res = {};
@@ -134,7 +134,7 @@ function getMeta($) {
     res.seconds = -1;
   }
   return res;
-};
+}
 
 const getDirector = ($) => {
   const director = $('#info>span').eq('0').text();
@@ -246,6 +246,6 @@ async function main() {
     }
   }
   console.log('finish all');
-};
+}
 
 main();

@@ -36,7 +36,7 @@ async function getNotionDBList(start_cursor) {
   }
   const response = await notion.databases.query(query_obj);
   return response;
-};
+}
 
 function getPropertiesFromInfo(Info) {
   return {
@@ -60,7 +60,7 @@ async function updateNotionPage(page_info, obj) {
     console.error(err);
     console.error('The function execution failed !');
   }
-};
+}
 
 
 async function pageWork(one) {
@@ -72,7 +72,7 @@ async function pageWork(one) {
     };
     await updateNotionPage(one, obj);
   }
-};
+}
 
 async function main() {
   let cursor;
@@ -90,6 +90,6 @@ async function main() {
     }
   }
   console.log('finish all');
-};
+}
 
 main();
