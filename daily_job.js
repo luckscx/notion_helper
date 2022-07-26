@@ -10,8 +10,11 @@ const notion = new Client({auth: NOTION_KEY, logLevel: LogLevel.INFO});
 
 function getTodayProperty() {
   let target_day = moment();
-  if (target_day.day() == 6) {
+  if (target_day.day() == 0) {
     target_day = target_day.add(1, 'days');
+  }
+  if (target_day.day() == 6) {
+    target_day = target_day.add(2, 'days');
   }
   const name_title = target_day.format('日报 MM.DD');
   const day_str = target_day.format('YYYY-MM-DD');
@@ -60,7 +63,12 @@ async function getCurrentPage() {
 }
 
 const getPageTitle = (page) => {
-  return page.properties['Name']['title'][0];
+  const title = page.properties['Name']['title'][0]['plain_text'];
+  if (!title) {
+    exit(-1);
+  }
+  console.log(title);
+  return title;
 };
 
 // 拿到最新的两个页面，修改其中一天的日期属性
@@ -68,8 +76,8 @@ async function main() {
   let cursor;
   const resp = await getCurrentPage(cursor);
   const cnt = resp.results.length;
-  if (cnt == 2 && getPageTitle(resp.results[0]) == getPageTitle(resp.results[0])) {
-    await updateNotionPage(resp.results[1]);
+  if (cnt == 2 && getPageTitle(resp.results[0]) == getPageTitle(resp.results[1])) {
+    await updateNotionPage(resp.results[0]);
   }
 }
 
