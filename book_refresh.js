@@ -1,5 +1,4 @@
 const {Client, LogLevel} = require('@notionhq/client');
-const cheerio = require('cheerio');
 const superagent = require('superagent');
 const Promise = require('bluebird');
 const retry = require('async-await-retry');
@@ -84,9 +83,12 @@ function getPropertiesFromInfo(Info) {
   const rating = parseFloat(Info.rating);
   const rating_user = parseInt(Info.rating_user);
   const pub_date = Info['出版年'];
-  let formate_date = moment(pub_date, 'YYYY-mm-dd').format('YYYY-MM-DD');
+  let formate_date = moment(pub_date, 'YYYY-MM-DD').format('YYYY-MM-DD');
   if (formate_date == 'Invalid date') {
-    formate_date = moment(pub_date, 'YYYY年mm月').format('YYYY-MM-DD');
+    formate_date = moment(pub_date, 'YYYY-M').format('YYYY-MM-DD');
+  }
+  if (formate_date == 'Invalid date') {
+    formate_date = moment(pub_date, 'YYYY年M月').format('YYYY-MM-DD');
   }
   console.log(pub_date, formate_date);
   const author = Info['作者'].split('/');
@@ -187,6 +189,12 @@ async function updateNotionPage(page_info, obj) {
 async function pageWork(one) {
   const prop = one.properties;
   let key = prop['书名'].title[0].plain_text;
+  if (prop['ISBN'].rich_text) {
+    const isbn = prop['ISBN'].rich_text[0].plain_text;
+    if (isbn.length > 10) {
+      key = isbn;
+    }
+  }
 
   key = key.replace(/-/g, '');
   const page_url = await searchBook(key);
