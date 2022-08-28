@@ -53,6 +53,10 @@ async function getCurrentPage() {
     page_size: 2,
     sorts: [
       {
+        property: '日期',
+        direction: 'descending',
+      },
+      {
         property: 'CreateTime',
         direction: 'descending',
       },
@@ -77,7 +81,7 @@ async function main() {
   const resp = await getCurrentPage(cursor);
   const cnt = resp.results.length;
   if (cnt == 2 && getPageTitle(resp.results[0]) == getPageTitle(resp.results[1])) {
-    await updateNotionPage(resp.results[0]);
+    await updateNotionPage(resp.results[1]);
   }
 }
 

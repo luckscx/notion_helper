@@ -189,7 +189,7 @@ async function updateNotionPage(page_info, obj) {
 async function pageWork(one) {
   const prop = one.properties;
   let key = prop['书名'].title[0].plain_text;
-  if (prop['ISBN'].rich_text) {
+  if (prop['ISBN'].rich_text[0]) {
     const isbn = prop['ISBN'].rich_text[0].plain_text;
     if (isbn.length > 10) {
       key = isbn;
