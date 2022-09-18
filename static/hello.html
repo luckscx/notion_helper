@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Notion Button</title>
+</head>
+<body>
+<button id="daily">Daily</button>
+<button id="book">Book</button>
+<button id="movie">Movie</button>
+<div id="resp"></div>
+<script>
+  const regBtnClickEvent = (id, path) => {
+    const button = document.getElementById(id);
+    button.addEventListener('click', async _ => {
+      try {
+        const response = await fetch(path, {
+          method: 'post',
+        });
+        const res_text = await response.text();
+        const res_div = document.getElementById('resp');
+        res_div.innerText = res_text;
+      } catch (err) {
+        console.error(`Error: ${err}`);
+      }
+    });
+  };
+
+  regBtnClickEvent('daily', '/daily');
+  regBtnClickEvent('movie', '/movie');
+  regBtnClickEvent('book', '/book');
+</script>
+</body>
+</html>
