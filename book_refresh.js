@@ -90,7 +90,10 @@ function getPropertiesFromInfo(Info) {
   if (formate_date == 'Invalid date') {
     formate_date = moment(pub_date, 'YYYY年M月').format('YYYY-MM-DD');
   }
-  console.log(pub_date, formate_date);
+  // 没有有效值
+  if (formate_date == 'Invalid date') {
+    formate_date = '1000-01-01';
+  }
   const author = Info['作者'].split('/');
   let trans = [];
   if (Info['译者']) {
@@ -188,12 +191,21 @@ async function updateNotionPage(page_info, obj) {
 
 async function pageWork(one) {
   const prop = one.properties;
-  let key = prop['书名'].title[0].plain_text;
+  let key = '';
+  if (prop['书名'].title[0]) {
+    key = prop['书名'].title[0].plain_text;
+  }
+
   if (prop['ISBN'].rich_text[0]) {
     const isbn = prop['ISBN'].rich_text[0].plain_text;
     if (isbn.length > 10) {
       key = isbn;
     }
+  }
+
+  if (!key) {
+    console.log('no valid key');
+    return;
   }
 
   key = key.replace(/-/g, '');

@@ -32,6 +32,7 @@ async function getBlockChilds(page_id) {
 function makeNewPage(idx) {
   const target_day = moment().add(idx, 'days').format('YYYY-MM-DD');
   const target_title = moment().add(idx, 'days').format('YYYY-MM-DD (ddd)');
+  console.log('added new day page %s', target_day);
   const new_props = {
     'Name': {
       type: 'title',
@@ -54,7 +55,6 @@ async function addNotionPage(idx) {
       parent: {database_id: databaseId},
       properties: makeNewPage(idx),
     });
-    console.log('added new day page success');
     return true;
   } catch (err) {
     console.error(err.body);
