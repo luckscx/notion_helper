@@ -94,15 +94,26 @@ function getPropertiesFromInfo(Info) {
   if (formate_date == 'Invalid date') {
     formate_date = '1000-01-01';
   }
-  const author = Info['作者'].split('/');
+
+  let author = [];
+  if (Info['作者'] != '') {
+    author = Info['作者'].split('/');
+  }
   let trans = [];
   if (Info['译者']) {
     trans = Info['译者'].split('/');
   }
+
   let ori_name = Info['原作名'];
   if (!ori_name) {
     ori_name = Info.title;
   }
+
+  let publisher = Info['出版社'] || Info['出品方'];
+  if (!publisher) {
+    publisher = '';
+  }
+
   const page_num = parseInt(Info['页数']);
   const obj = {
     '书名': {
@@ -137,7 +148,7 @@ function getPropertiesFromInfo(Info) {
     '出版社': {
       'select':
       {
-        'name': Info['出版社'],
+        'name': publisher,
       },
     },
     '豆瓣打分人数': {
@@ -180,7 +191,7 @@ async function updateNotionPage(page_info, obj) {
         page_id: pageId,
         properties: getPropertiesFromInfo(obj),
       });
-    }, null, {retriesMax: 1, interval: 1000, exponential: true, factor: 3, jitter: 100});
+    }, null, {retriesMax: 2, interval: 1000, exponential: true, factor: 3, jitter: 100});
   } catch (err) {
     console.log(obj);
     console.error(err);
