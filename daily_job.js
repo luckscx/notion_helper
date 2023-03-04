@@ -13,9 +13,6 @@ function getTodayProperty() {
   if (target_day.day() == 0) {
     target_day = target_day.add(1, 'days');
   }
-  if (target_day.day() == 6) {
-    target_day = target_day.add(2, 'days');
-  }
   const name_title = target_day.format('日报 MM.DD');
   const day_str = target_day.format('YYYY-MM-DD');
   const obj = {
