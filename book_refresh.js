@@ -214,16 +214,27 @@ async function pageWork(one) {
     }
   }
 
-  if (!key) {
-    console.log('no valid key');
-    return;
+  let has_page = false;
+  if (prop['豆瓣页面'].url) {
+    has_page = true;
   }
 
-  key = key.replace(/-/g, '');
-  const page_url = await searchBook(key);
-  if (!page_url) {
-    console.log('search fail fail key %s', key);
-    return;
+  let page_url = '';
+  if (!has_page) {
+    if (!key) {
+      console.log('no valid key');
+      return;
+    }
+
+    key = key.replace(/-/g, '');
+    page_url = await searchBook(key);
+    if (!page_url) {
+      console.log('search fail fail key %s', key);
+      return;
+    }
+  } else {
+    page_url = prop['豆瓣页面'].url;
+    console.log('has page_url %s', page_url);
   }
 
   const douban_info = await getBookInfo(page_url);
