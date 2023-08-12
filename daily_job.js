@@ -78,6 +78,7 @@ async function main() {
   const resp = await getCurrentPage(cursor);
   const cnt = resp.results.length;
   if (cnt == 2 && getPageTitle(resp.results[0]) == getPageTitle(resp.results[1])) {
+    console.log('update page');
     await updateNotionPage(resp.results[1]);
   }
 }

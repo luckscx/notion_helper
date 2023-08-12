@@ -171,7 +171,7 @@ function getPropertiesFromInfo(Info) {
     '封面': {
       'files': [
         {
-          name: Info.pic,
+          name: '封面图',
           type: 'external',
           external: {
             url: Info.pic,
