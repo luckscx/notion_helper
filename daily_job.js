@@ -13,7 +13,7 @@ function getTodayProperty() {
   if (target_day.day() == 0) {
     target_day = target_day.add(1, 'days');
   }
-  const name_title = target_day.format('日报 MM.DD');
+  const name_title = target_day.format('日报 YY.MM.DD');
   const day_str = target_day.format('YYYY-MM-DD');
   const obj = {
     'Name': {
@@ -29,7 +29,6 @@ function getTodayProperty() {
 }
 
 async function updateNotionPage(page_info) {
-  console.log(page_info);
   const pageId = page_info.id;
   try {
     await retry(async () => {
@@ -78,7 +77,7 @@ async function main() {
   const resp = await getCurrentPage(cursor);
   const cnt = resp.results.length;
   if (cnt == 2 && getPageTitle(resp.results[0]) == getPageTitle(resp.results[1])) {
-    console.log('update page');
+    console.log('do update page');
     await updateNotionPage(resp.results[1]);
   }
 }

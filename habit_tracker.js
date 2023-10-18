@@ -74,7 +74,7 @@ async function addNotionPage(idx) {
 }
 
 async function main() {
-  for (let i = 0; i < 30; ++i) {
+  for (let i = -5; i < 30; ++i) {
     await addNotionPage(i);
   }
 }
