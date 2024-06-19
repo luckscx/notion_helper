@@ -34,6 +34,7 @@ async function pageWork(one) {
     await updateNotionPage(one, douban_info);
   } else {
     console.log('not get page info for %s', page_url);
+    console.log(prop['标题']);
   }
 }
 
@@ -138,9 +139,16 @@ function getMeta($) {
 
 const getDirector = ($) => {
   const director = $('#info>span').eq('0').text();
+  console.log(director);
   let arr = director.split(':');
-  arr = arr[1].split('/');
-  return arr;
+  if (arr[0] == '导演') {
+    console.log(arr);
+    arr = arr[1].split('/');
+    console.log(arr);
+    return arr;
+  } else {
+    return ['无']
+  }
 };
 
 async function getMovieInfo(url) {

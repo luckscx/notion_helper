@@ -9,7 +9,7 @@
   "author": "Grissom",
   "license": "ISC",
   "dependencies": {
-    "@notionhq/client": "^1.0.4",
+    "@notionhq/client": "^2.2.15",
     "api": "^4.4.0",
     "async-await-retry": "^1.2.4",
     "bluebird": "^3.7.2",
