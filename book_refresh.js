@@ -48,7 +48,7 @@ async function searchBook(key) {
   if (!key) {
     return null;
   }
-  const info_url = `http://127.0.0.1:8085/book/list?key=${encodeURI(key)}`;
+  const info_url = `http://sh.grissom.cn:8085/book/list?key=${encodeURI(key)}`;
   try {
     const res = await superagent.get(info_url);
     const json = res.body;
@@ -65,7 +65,7 @@ async function searchBook(key) {
 }
 
 async function getBookInfo(url) {
-  const load_data = `http://127.0.0.1:8085/book/detail?url=${url}`;
+  const load_data = `http://sh.grissom.cn:8085/book/detail?url=${url}`;
   console.log(load_data);
   try {
     const res = await superagent.get(load_data);
