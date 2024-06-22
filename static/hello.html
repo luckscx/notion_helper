@@ -2,7 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
+  <meta name="color-scheme" content="light dark">
   <title>Notion Button</title>
+    <style>
+    button {
+        padding: 15px 32px;
+        text-align: center;
+        text-decoration: none;
+        display: inline-block;
+        font-size: 18px;
+    }
+    @media (prefers-color-scheme: dark) {
+        body {
+
+            background-color: #222;
+
+            color: #ddd;
+
+        }
+
+    }
+    </style>
 </head>
 <body>
 <button id="daily">Daily</button>

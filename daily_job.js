@@ -63,6 +63,7 @@ async function getCurrentPage() {
 }
 
 const getPageTitle = (page) => {
+  console.log(page.properties['Name']);
   const title = page.properties['Name']['title'][0]['plain_text'];
   if (!title) {
     exit(-1);
@@ -76,6 +77,7 @@ async function main() {
   let cursor;
   const resp = await getCurrentPage(cursor);
   const cnt = resp.results.length;
+  console.log('get cnt', cnt)
   if (cnt == 2 && getPageTitle(resp.results[0]) == getPageTitle(resp.results[1])) {
     console.log('do update page');
     await updateNotionPage(resp.results[1]);
