@@ -8,11 +8,17 @@ const databaseId = process.env.DATABASE_ID;
 
 const notion = new Client({auth: NOTION_KEY, logLevel: LogLevel.INFO});
 
-function getTodayProperty() {
+function getTodayProperty(page_info) {
   let target_day = moment();
-  if (target_day.day() == 0) {
+  if (target_day.day() == 0) { // 当天是星期天，直接处理为星期一
     target_day = target_day.add(1, 'days');
   }
+
+  if (page_info.properties['日期'].date.start == target_day) {
+    target_day = target_day.add(1, 'days');
+  }
+  console.log(page_info);
+
   const name_title = target_day.format('日报 YY.MM.DD');
   const day_str = target_day.format('YYYY-MM-DD');
   const obj = {
@@ -34,7 +40,7 @@ async function updateNotionPage(page_info) {
     await retry(async () => {
       return await notion.pages.update({
         page_id: pageId,
-        properties: getTodayProperty(),
+        properties: getTodayProperty(page_info),
       });
     }, null, {retriesMax: 1, interval: 1000, exponential: true, factor: 3, jitter: 100});
   } catch (err) {
