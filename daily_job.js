@@ -14,10 +14,10 @@ function getTodayProperty(page_info) {
     target_day = target_day.add(1, 'days');
   }
 
-  if (page_info.properties['日期'].date.start == target_day) {
+  //改成明天
+  if (page_info.properties['日期'].date.start == target_day.format('YYYY-MM-DD')) {
     target_day = target_day.add(1, 'days');
   }
-  console.log(page_info);
 
   const name_title = target_day.format('日报 YY.MM.DD');
   const day_str = target_day.format('YYYY-MM-DD');
