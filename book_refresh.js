@@ -8,7 +8,7 @@ const process = require('process');
 const NOTION_KEY = process.env.NOTION_KEY;
 const databaseId = process.env.DATABASE_ID;
 
-const notion = new Client({auth: NOTION_KEY, logLevel: LogLevel.WARN});
+const notion = new Client({auth: NOTION_KEY, logLevel: LogLevel.WARN, timeoutMs: 10000});
 
 
 async function getNotionDBList(start_cursor) {
@@ -40,8 +40,7 @@ async function getNotionDBList(start_cursor) {
   if (start_cursor) {
     query_obj.start_cursor = start_cursor;
   }
-  const response = await notion.databases.query(query_obj);
-  return response;
+  return await notion.databases.query(query_obj);
 }
 
 async function searchBook(key) {
@@ -148,7 +147,7 @@ function getPropertiesFromInfo(Info) {
     '出版社': {
       'select':
       {
-        'name': publisher,
+        'name': publisher || 'none',
       },
     },
     '豆瓣打分人数': {
@@ -252,7 +251,7 @@ async function main() {
     const list = await getNotionDBList(cursor);
     const cnt = list.results.length;
     console.log('get notion db list %d', cnt);
-    await Promise.map(list.results, pageWork, {concurrency: 5});
+    await Promise.map(list.results, pageWork, {concurrency: 3});
     console.log('batch done %d', cnt);
     if (list.has_more) {
       cursor = list.next_cursor;
