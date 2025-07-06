@@ -40,7 +40,18 @@ async function getNotionDBList(start_cursor) {
   if (start_cursor) {
     query_obj.start_cursor = start_cursor;
   }
-  return await notion.databases.query(query_obj);
+  
+  // 添加重试机制来处理网络连接问题
+  try {
+    return await retry(async () => {
+      return await notion.databases.query(query_obj);
+    }, null, {retriesMax: 3, interval: 2000, exponential: true, factor: 2, jitter: 500});
+  } catch (error) {
+    console.error('获取 Notion 数据库列表失败:', error.message);
+    // 等待一段时间后重试
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    throw error;
+  }
 }
 
 const search_host = '127.0.0.1:8085'
@@ -249,17 +260,39 @@ async function pageWork(one) {
 
 async function main() {
   let cursor;
+  let retryCount = 0;
+  const maxRetries = 2;
+  
   while (true) {
-    const list = await getNotionDBList(cursor);
-    const cnt = list.results.length;
-    console.log('get notion db list %d', cnt);
-    await Promise.map(list.results, pageWork, {concurrency: 3});
-    console.log('batch done %d', cnt);
-    if (list.has_more) {
-      cursor = list.next_cursor;
-      console.log('now cursor %s', cursor);
-    } else {
-      break;
+    try {
+      const list = await getNotionDBList(cursor);
+      const cnt = list.results.length;
+      console.log('get notion db list %d', cnt);
+      
+      // 重置重试计数器，因为成功获取到了数据
+      retryCount = 0;
+      
+      await Promise.map(list.results, pageWork, {concurrency: 3});
+      console.log('batch done %d', cnt);
+      
+      if (list.has_more) {
+        cursor = list.next_cursor;
+        console.log('now cursor %s', cursor);
+      } else {
+        break;
+      }
+    } catch (error) {
+      console.error('获取数据时发生错误:', error.message);
+      retryCount++;
+      
+      if (retryCount >= maxRetries) {
+        console.error('达到最大重试次数，程序退出');
+        throw error;
+      }
+      
+      const waitTime = retryCount * 10000; // 递增等待时间
+      console.log(`等待 ${waitTime/1000} 秒后进行第 ${retryCount} 次重试...`);
+      await new Promise(resolve => setTimeout(resolve, waitTime));
     }
   }
   console.log('finish all');

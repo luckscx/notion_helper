@@ -10,10 +10,13 @@ app.get('/', function(req, res) {
 });
 
 function do_cmd(shell_path, res) {
+  console.log("do_cmd", shell_path)
   exec("sh " + shell_path, (error, stdout, stderr) => {
     console.log(stdout);
     console.log(stderr);
-    res.send(stdout)
+    if (res) {
+      res.send(stdout)
+    }
   })
 }
 
@@ -27,6 +30,12 @@ app.post('/book', function(req, res) {
 
 app.post('/movie', function(req, res) {
   do_cmd("movie.sh", res)
+});
+
+// 刷新书籍 异步执行
+app.post('/book_refresh', function(req, res) {
+  do_cmd("book.sh")
+  res.send("ok")
 });
 
 const port = 8089
