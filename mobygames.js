@@ -7,8 +7,6 @@ const { getGameEnglishName } = require("./search_game_name");
  * 提供API接口供其他模块使用
  */
 
-// ... existing code ...
-
 /**
  * 智能搜索游戏 - 自动判断中英文并获取完整游戏信息
  * @param {string} gameTitle - 游戏标题（支持中文或英文）
@@ -697,10 +695,8 @@ async function searchGameByTitle(gameTitle) {
     
     console.log(`🔍 找到 ${gameLinks.length} 个游戏链接`);
     
-    // 处理前10个结果
-    const maxResults = Math.min(gameLinks.length, 10);
-    
-    for (let i = 0; i < maxResults; i++) {
+    // 处理所有结果，但只保留符合格式的URL
+    for (let i = 0; i < gameLinks.length; i++) {
       const link = gameLinks.eq(i);
       const href = link.attr('href');
       const linkText = link.text().trim();
@@ -712,23 +708,33 @@ async function searchGameByTitle(gameTitle) {
           fullUrl = `https://www.mobygames.com${href}`;
         }
         
-        // 计算匹配度
-        const matchScore = calculateMatchScore(gameTitle, linkText);
-        
-        const result = {
-          title: linkText,
-          url: fullUrl,
-          matchScore: matchScore
-        };
-        
-        searchResults.push(result);
-        
-        // 更新最佳匹配
-        if (!bestMatch || matchScore > bestMatch.matchScore) {
-          bestMatch = result;
+        // 验证URL格式是否符合 game/{numid}/game_name 的要求
+        if (isValidGameUrl(fullUrl)) {
+          // 计算匹配度
+          const matchScore = calculateMatchScore(gameTitle, linkText);
+          
+          const result = {
+            title: linkText,
+            url: fullUrl,
+            matchScore: matchScore
+          };
+          
+          searchResults.push(result);
+          
+          // 更新最佳匹配
+          if (!bestMatch || matchScore > bestMatch.matchScore) {
+            bestMatch = result;
+          }
+          
+          console.log(`🔍 结果 ${searchResults.length}: ${linkText} (匹配度: ${matchScore})`);
+          
+          // 限制结果数量为前10个
+          if (searchResults.length >= 10) {
+            break;
+          }
+        } else {
+          console.log(`⚠️  跳过不符合格式的URL: ${fullUrl}`);
         }
-        
-        console.log(`🔍 结果 ${i + 1}: ${linkText} (匹配度: ${matchScore})`);
       }
     }
     
@@ -771,6 +777,51 @@ async function searchGameByTitle(gameTitle) {
       results: [],
       bestMatch: null
     };
+  }
+}
+
+/**
+ * 验证游戏URL是否符合 game/{numid}/game_name 格式
+ * @param {string} url - 要验证的URL
+ * @returns {boolean} 是否符合格式要求
+ */
+function isValidGameUrl(url) {
+  try {
+    // 解析URL
+    const urlObj = new URL(url);
+    
+    // 检查域名是否为 mobygames.com
+    if (!urlObj.hostname.includes('mobygames.com')) {
+      return false;
+    }
+    
+    // 检查路径格式
+    const pathParts = urlObj.pathname.split('/').filter(part => part.length > 0);
+    
+    // 路径必须至少包含3部分: ['game', '{numid}', 'game_name']
+    if (pathParts.length < 3) {
+      return false;
+    }
+    
+    // 第一部分必须是 'game'
+    if (pathParts[0] !== 'game') {
+      return false;
+    }
+    
+    // 第二部分必须是数字ID
+    if (!/^\d+$/.test(pathParts[1])) {
+      return false;
+    }
+    
+    // 第三部分必须存在且不为空
+    if (!pathParts[2] || pathParts[2].trim() === '') {
+      return false;
+    }
+    
+    return true;
+  } catch (error) {
+    // URL解析失败，返回false
+    return false;
   }
 }
 
@@ -917,6 +968,7 @@ module.exports = {
   getGameDescription,
   getAllMetadata,
   calculateMatchScore,
+  isValidGameUrl,
   containsChinese          // 新增：中文字符检测函数
 };
 

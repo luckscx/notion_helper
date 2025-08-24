@@ -40,6 +40,12 @@ async function updateNotionPage(page_info, obj) {
 
 async function pageWork(one) {
   const prop = one.properties;
+  let page_url = prop['MobyGamesURL'].url;
+  if (MobyGames.isValidGameUrl(page_url)) {
+    console.log(`✅ 页面: ${page_url} 有效`);
+  } else {
+    page_url = null;
+  }
   
   // 获取页面名称用于日志
   let pageName = '未知页面';
@@ -54,7 +60,7 @@ async function pageWork(one) {
   console.log(`🔍 处理页面: ${pageName}`);
   
   // 检查MobyGamesURL
-  if (!prop['MobyGamesURL'] || !prop['MobyGamesURL'].url) {
+  if (!page_url) {
     console.log(`⚠️  ${pageName}: MobyGamesURL 为空，尝试使用智能搜索获取游戏信息...`);
     
     // 使用智能搜索获取游戏信息
@@ -84,7 +90,6 @@ async function pageWork(one) {
     return;
   }
   
-  const page_url = prop['MobyGamesURL'].url;
   console.log(`📡 获取游戏信息: ${page_url}`);
   
   const page_info = await getGameInfo(page_url);
@@ -105,6 +110,10 @@ async function getNotionDBList(start_cursor) {
       'and': [{
         'property': 'MobyGames评分', 'number': {
           'is_empty': true,
+        },
+      }, {
+        'property': '个人评分', 'number': {
+          'greater_than': 8,
         },
       }],
     },
@@ -218,29 +227,40 @@ function getPropertiesFromInfo(Info) {
 }
 
 async function main() {
-  let cursor;
-  while (true) {
-    const response = await getNotionDBList(cursor);
-    
-    // 检查响应是否成功
-    if (!response || !response.data) {
-      console.error('查询数据库失败:', response);
-      break;
+  try {
+    let cursor;
+    while (true) {
+      const response = await getNotionDBList(cursor);
+      
+      // 检查响应是否成功
+      if (!response || !response.data) {
+        console.error('查询数据库失败:', response);
+        break;
+      }
+      
+      const list = response.data; // 从 response.data 中获取实际数据
+      const cnt = list.results.length;
+      console.log('get notion db list %d', cnt);
+      await Promise.map(list.results, pageWork, {concurrency: batch_size});
+      console.log('batch done %d', cnt);
+      if (list.has_more) {
+        cursor = list.next_cursor;
+        console.log('now cursor %s', cursor);
+      } else {
+        break;
+      }
     }
-    
-    const list = response.data; // 从 response.data 中获取实际数据
-    const cnt = list.results.length;
-    console.log('get notion db list %d', cnt);
-    await Promise.map(list.results, pageWork, {concurrency: batch_size});
-    console.log('batch done %d', cnt);
-    if (list.has_more) {
-      cursor = list.next_cursor;
-      console.log('now cursor %s', cursor);
-    } else {
-      break;
-    }
+    console.log('finish all');
+  } catch (error) {
+    console.error('❌ 主函数执行失败:', error.message);
+    console.error('错误详情:', error);
+    process.exit(1);
   }
-  console.log('finish all');
 }
 
-main();
+// 使用 .catch() 处理未捕获的Promise拒绝
+main().catch(error => {
+  console.error('❌ 程序执行失败:', error.message);
+  console.error('错误详情:', error);
+  process.exit(1);
+});
