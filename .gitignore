@@ -1,12 +1,47 @@
-node_modules
-my.sh
-book.sh
-daily.sh
-movie.sh
-habit.sh
-out.txt
-.idea
+# 依赖
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-habit_tracker.sh
-todo.sh
+# 环境变量
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# 日志文件
+logs
+*.log
+
+# 运行时数据
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# 令牌缓存文件
+.igdb_token_cache.json
+*.token_cache.json
+
+# 配置文件（包含敏感信息）
+config.js
+
+# 临时文件
+.tmp/
+.temp/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 操作系统
 .DS_Store
+Thumbs.db
+
+# 构建输出
+dist/
+build/

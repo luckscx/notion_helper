@@ -18,9 +18,18 @@ const notion = new NotionAPI({
 async function updateNotionPage(page_info, obj) {
   const pageId = page_info.id;
   try {
+    let properties;
+    
+    // 检查是否有预定义的属性（用于智能搜索的情况）
+    if (obj._properties) {
+      properties = obj._properties;
+    } else {
+      properties = getPropertiesFromInfo(obj);
+    }
+    
     await retry(async () => {
       return await notion.updatePage(pageId, {
-        properties: getPropertiesFromInfo(obj)
+        properties: properties
       });
     }, null, {retriesMax: 3, interval: 1000, exponential: true, factor: 3, jitter: 100});
   } catch (err) {
@@ -42,8 +51,32 @@ async function pageWork(one) {
   
   // 检查MobyGamesURL
   if (!prop['MobyGamesURL'] || !prop['MobyGamesURL'].url) {
-    console.log(`⚠️  跳过 ${pageName}: MobyGamesURL 为空或不存在`);
-    console.log(`   需要手动添加 MobyGames 的URL: https://www.mobygames.com/game/...`);
+    console.log(`⚠️  ${pageName}: MobyGamesURL 为空，尝试使用智能搜索获取游戏信息...`);
+    
+    // 使用智能搜索获取游戏信息
+    const smartResult = await MobyGames.smartSearchGame(pageName);
+    
+    if (smartResult.success && smartResult.gameInfo) {
+      console.log(`✅ 智能搜索成功获取游戏信息: ${smartResult.gameInfo.name}`);
+      console.log(`   英文名: ${smartResult.englishTitle}`);
+      console.log(`   MobyGames链接: ${smartResult.mobygamesUrl}`);
+      
+      // 更新Notion页面，同时添加MobyGamesURL
+      const updatedProperties = getPropertiesFromInfo(smartResult.gameInfo);
+      updatedProperties['MobyGamesURL'] = {
+        'url': smartResult.mobygamesUrl
+      };
+      
+      await updateNotionPage(one, {
+        ...smartResult.gameInfo,
+        _properties: updatedProperties
+      });
+      
+      console.log(`✅ 成功更新页面并添加MobyGamesURL`);
+    } else {
+      console.log(`❌ 智能搜索失败: ${smartResult.message}`);
+      console.log(`   需要手动添加 MobyGames 的URL: https://www.mobygames.com/game/...`);
+    }
     return;
   }
   
@@ -157,13 +190,6 @@ function getPropertiesFromInfo(Info) {
     },
   };
   
-  // 添加新字段（如果Notion数据库支持）
-  if (platforms && platforms.length > 0) {
-    properties['平台'] = {
-      'multi_select': platforms.map(platform => ({ name: platform }))
-    };
-  }
-  
   if (releaseDate) {
     properties['发布日期'] = {
       'date': {
@@ -173,7 +199,7 @@ function getPropertiesFromInfo(Info) {
   }
   
   if (gameTypes && gameTypes.length > 0) {
-    properties['Tags'] = {
+    properties['Genre'] = {
       'multi_select': gameTypes.map(type => ({ name: type }))
     };
   }
@@ -203,13 +229,12 @@ async function main() {
     console.log('get notion db list %d', cnt);
     await Promise.map(list.results, pageWork, {concurrency: batch_size});
     console.log('batch done %d', cnt);
-    break;
-    // if (list.has_more) {
-    //   cursor = list.next_cursor;
-    //   console.log('now cursor %s', cursor);
-    // } else {
-    //   break;
-    // }
+    if (list.has_more) {
+      cursor = list.next_cursor;
+      console.log('now cursor %s', cursor);
+    } else {
+      break;
+    }
   }
   console.log('finish all');
 }
