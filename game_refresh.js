@@ -43,8 +43,12 @@ async function pageWork(one) {
   
   // 获取页面名称用于日志
   let pageName = '未知页面';
+  let englishName = null;
   if (prop['Name'] && prop['Name'].title && prop['Name'].title[0]) {
     pageName = prop['Name'].title[0].plain_text;
+  }
+  if (prop['English Name'] && prop['English Name'].rich_text && prop['English Name'].rich_text[0]) {
+    englishName = prop['English Name'].rich_text[0].plain_text;
   }
   
   console.log(`🔍 处理页面: ${pageName}`);
@@ -54,7 +58,7 @@ async function pageWork(one) {
     console.log(`⚠️  ${pageName}: MobyGamesURL 为空，尝试使用智能搜索获取游戏信息...`);
     
     // 使用智能搜索获取游戏信息
-    const smartResult = await MobyGames.smartSearchGame(pageName);
+    const smartResult = await MobyGames.smartSearchGame(pageName, englishName);
     
     if (smartResult.success && smartResult.gameInfo) {
       console.log(`✅ 智能搜索成功获取游戏信息: ${smartResult.gameInfo.name}`);

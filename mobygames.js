@@ -14,7 +14,7 @@ const { getGameEnglishName } = require("./search_game_name");
  * @param {string} gameTitle - 游戏标题（支持中文或英文）
  * @returns {Promise<Object>} 游戏信息对象
  */
-async function smartSearchGame(gameTitle) {
+async function smartSearchGame(gameTitle, origin_english_name) {
   if (!gameTitle || gameTitle.trim() === '') {
     return {
       success: false,
@@ -27,9 +27,9 @@ async function smartSearchGame(gameTitle) {
   }
   
   try {
-    console.log(`🚀 开始智能搜索游戏: ${gameTitle}`);
+    console.log(`🚀 开始智能搜索游戏: ${gameTitle} ${origin_english_name}`);
     
-    let englishTitle = gameTitle.trim();
+    let englishTitle = origin_english_name || gameTitle.trim();
     let isChineseInput = false;
     
     // 第一步：判断是否为中文输入
@@ -548,8 +548,6 @@ async function getGameInfo(url) {
       console.log('❌ 请求失败: 没有返回内容');
       return null;
     }
-    
-    console.log(`✅ HTTP请求成功 (状态码: ${response.status})`);
     
     // 使用cheerio解析HTML
     const $ = cheerio.load(response.text);
