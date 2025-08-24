@@ -14,9 +14,14 @@
     "async-await-retry": "^1.2.4",
     "bluebird": "^3.7.2",
     "cheerio": "^1.0.0-rc.10",
+    "dotenv": "^17.2.1",
     "express": "^4.18.1",
+    "https-proxy-agent": "^7.0.6",
     "moment": "^2.29.3",
-    "superagent": "^10.2.3"
+    "proxy-agent": "^6.5.0",
+    "socks-proxy-agent": "^8.0.5",
+    "superagent": "^10.2.3",
+    "tunnel": "^0.0.6"
   },
   "devDependencies": {
     "eslint": "^8.15.0",

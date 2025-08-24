@@ -29,11 +29,11 @@ async function smartSearchGame(gameTitle, origin_english_name) {
   try {
     console.log(`🚀 开始智能搜索游戏: ${gameTitle} ${origin_english_name}`);
     
-    let englishTitle = origin_english_name || gameTitle.trim();
+    let englishTitle = origin_english_name;
     let isChineseInput = false;
     
     // 第一步：判断是否为中文输入
-    if (containsChinese(gameTitle)) {
+    if (!englishTitle && containsChinese(gameTitle)) {
       isChineseInput = true;
       console.log('🔍 检测到中文输入，开始获取英文名称...');
       
@@ -43,10 +43,20 @@ async function smartSearchGame(gameTitle, origin_english_name) {
         console.log(`✅ 中文转英文成功: ${gameTitle} → ${englishTitle}`);
       } else {
         console.log('⚠️  中文转英文失败，尝试直接使用原标题搜索');
-        // 如果中文转英文失败，继续使用原标题
       }
     } else {
-      console.log('检测到英文输入，直接进行搜索');
+      englishTitle = gameTitle.trim();
+    }
+
+    if (!englishTitle) {
+      return {
+        success: false,
+        message: '英文名称不能为空',
+        inputTitle: gameTitle,
+        englishTitle: null,
+        mobygamesUrl: null,
+        gameInfo: null
+      };
     }
     
     // 第二步：使用英文标题搜索MobyGames
