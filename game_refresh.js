@@ -5,6 +5,7 @@ const Promise = require('bluebird');
 const retry = require('async-await-retry');
 const process = require('process');
 const MobyGames = require('./mobygames');
+const ImageProxy = require('./image_proxy');
 
 const NOTION_KEY = process.env.NOTION_KEY;
 const databaseId = process.env.DATABASE_ID;
@@ -24,7 +25,7 @@ async function updateNotionPage(page_info, obj) {
     if (obj._properties) {
       properties = obj._properties;
     } else {
-      properties = getPropertiesFromInfo(obj);
+      properties = await getPropertiesFromInfo(obj);
     }
     
     await retry(async () => {
@@ -72,7 +73,7 @@ async function pageWork(one) {
       console.log(`   MobyGames链接: ${smartResult.mobygamesUrl}`);
       
       // 更新Notion页面，同时添加MobyGamesURL
-      const updatedProperties = getPropertiesFromInfo(smartResult.gameInfo);
+      const updatedProperties = await getPropertiesFromInfo(smartResult.gameInfo);
       updatedProperties['MobyGamesURL'] = {
         'url': smartResult.mobygamesUrl
       };
@@ -169,10 +170,52 @@ async function getGameInfo(url) {
 
 // getPublisher函数已移至mobygames.js模块
 
-function getPropertiesFromInfo(Info) {
+async function getPropertiesFromInfo(Info) {
   let {name, image, grade, publisher, developer, platforms, releaseDate, gameTypes, description, officialSite} = Info;
   const title = name;
-  grade = parseFloat(grade);
+  
+  // 处理分数，将"n/a"转换为0
+  if (grade === 'n/a' || grade === 'N/A' || grade === 'n/A' || grade === 'N/a') {
+    grade = 0;
+    console.log(`⚠️  检测到无效分数"n/a"，转换为0`);
+  } else {
+    grade = parseFloat(grade);
+    // 如果parseFloat返回NaN，也转换为0
+    if (isNaN(grade)) {
+      grade = 0;
+      console.log(`⚠️  分数解析失败，转换为0`);
+    }
+  }
+  
+  // 处理图片URL，确保符合Notion的长度限制
+  let processedImage = image;
+  if (image && image.length > 100) {
+    try {
+      console.log(`📸 处理长图片URL: ${image.length} 字符`);
+      
+      // 优先使用Grissom自建短链接服务
+      processedImage = await ImageProxy.processImageUrl(image, 'grissom');
+      
+      if (processedImage && processedImage.length <= 100) {
+        console.log(`✅ 图片URL处理成功: ${processedImage.length} 字符`);
+      } else {
+        console.warn(`⚠️  Grissom服务处理失败，尝试Cloudinary: ${processedImage ? processedImage.length : 0} 字符`);
+        // 如果Grissom服务失败，尝试Cloudinary
+        processedImage = await ImageProxy.processImageUrl(image, 'cloudinary', { cloudName: 'demo' });
+        
+        if (processedImage && processedImage.length <= 100) {
+          console.log(`✅ Cloudinary处理成功: ${processedImage.length} 字符`);
+        } else {
+          console.warn(`⚠️  Cloudinary也失败，尝试TinyURL: ${processedImage ? processedImage.length : 0} 字符`);
+          // 最后尝试TinyURL
+          processedImage = await ImageProxy.processImageUrl(image, 'tinyurl');
+        }
+      }
+    } catch (error) {
+      console.error(`❌ 图片URL处理失败:`, error.message);
+      processedImage = image; // 失败时使用原URL
+    }
+  }
   
   const properties = {
     'English Name': {
@@ -194,14 +237,18 @@ function getPropertiesFromInfo(Info) {
         'name': developer || 'none',
       },
     },
-    '封面图': {
+  };
+  
+  // 只有当图片URL存在且不为空时才添加封面图
+  if (processedImage) {
+    properties['封面图'] = {
       'files': [{
-        name: image, type: 'external', external: {
-          url: image,
+        name: name || '封面图', type: 'external', external: {
+          url: processedImage,
         },
       }],
-    },
-  };
+    };
+  }
   
   if (releaseDate) {
     properties['发布日期'] = {

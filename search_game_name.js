@@ -4,8 +4,8 @@ const path = require('path');
 const config = require('./config');
 
 // 从配置文件获取IGDB API凭据
-const clientId = config.IGDB_CLIENT_ID;
-const clientSecret = config.IGDB_CLIENT_SECRET;
+const clientId = config.igdb.clientId;
+const clientSecret = config.igdb.clientSecret;
 
 /**
  * 令牌管理类

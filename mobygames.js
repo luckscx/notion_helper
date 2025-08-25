@@ -28,10 +28,14 @@ async function smartSearchGame(gameTitle, origin_english_name) {
     console.log(`🚀 开始智能搜索游戏: ${gameTitle} ${origin_english_name}`);
     
     let englishTitle = origin_english_name;
+    if (!englishTitle) {
+      englishTitle = gameTitle.trim();
+    }
+
     let isChineseInput = false;
     
     // 第一步：判断是否为中文输入
-    if (!englishTitle && containsChinese(gameTitle)) {
+    if (containsChinese(englishTitle)) {
       isChineseInput = true;
       console.log('🔍 检测到中文输入，开始获取英文名称...');
       
@@ -42,14 +46,12 @@ async function smartSearchGame(gameTitle, origin_english_name) {
       } else {
         console.log('⚠️  中文转英文失败，尝试直接使用原标题搜索');
       }
-    } else {
-      englishTitle = gameTitle.trim();
     }
 
     if (!englishTitle) {
       return {
         success: false,
-        message: '英文名称不能为空',
+        message: '搜索名称不能为空',
         inputTitle: gameTitle,
         englishTitle: null,
         mobygamesUrl: null,
@@ -130,8 +132,9 @@ function containsChinese(text) {
   
   // 使用Unicode范围检测中文字符
   // 基本汉字：\u4e00-\u9fa5
-  // 扩展汉字：\u3400-\u4dbf, \u20000-\u2a6df, \u2a700-\u2b73f, \u2b740-\u2b81f, \u2b820-\u2ceaf
-  const chineseRegex = /[\u4e00-\u9fa5\u3400-\u4dbf\u20000-\u2a6df\u2a700-\u2b73f\u2b740-\u2b81f\u2b820-\u2ceaf]/;
+  // 扩展汉字：\u3400-\u4dbf
+  // 注意：某些扩展范围可能在某些JavaScript环境中不支持，所以只使用基本范围
+  const chineseRegex = /[\u4e00-\u9fa5\u3400-\u4dbf]/;
   
   return chineseRegex.test(text);
 }
@@ -140,11 +143,11 @@ function containsChinese(text) {
  * 测试智能搜索功能
  * @param {string} testTitle - 测试游戏标题
  */
-async function testSmartSearch(testTitle = '寂静岭2') {
+async function testSmartSearch(testTitle = '寂静岭2',origin_english_name) {
   try {
     console.log('🚀 测试智能搜索功能...\n');
     
-    const smartResult = await smartSearchGame(testTitle);
+    const smartResult = await smartSearchGame(testTitle,origin_english_name);
     
     if (smartResult.success) {
       console.log('\n🎉 智能搜索成功!');
@@ -563,7 +566,14 @@ async function getGameInfo(url) {
     // 提取游戏信息
     const meta_info = getMeta($);
     const {publisher, developer} = getPublisher($);
-    const grade = $('.mobyscore').text().trim();
+    let grade = $('.mobyscore').text().trim();
+    
+    // 处理分数，将"n/a"转换为0
+    if (grade === 'n/a' || grade === 'N/A' || grade === 'n/A' || grade === 'N/a') {
+      grade = '0';
+      console.log(`⚠️  MobyGames返回无效分数"n/a"，转换为0`);
+    }
+    
     const platforms = getPlatforms($);
     const releaseDate = getReleaseDate($);
     const gameTypes = getGameType($);
@@ -975,5 +985,5 @@ module.exports = {
 // 如果直接运行此文件，则执行测试
 if (require.main === module) {
   // 测试智能搜索功能
-  testSmartSearch('寂静岭2');
+  testSmartSearch('女鬼桥一开魂路');
 }
