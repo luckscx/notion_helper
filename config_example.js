@@ -43,6 +43,12 @@ module.exports = {
     clientSecret: 'your_twitch_client_secret_here'
   },
 
+  // RAWG API 配置 (用于游戏信息)
+  rawg: {
+    // RAWG API 密钥 (从 https://rawg.io/apidocs 获取)
+    apiKey: 'your_rawg_api_key_here'
+  },
+
   // 代理配置 (可选，用于网络访问)
   proxy: {
     // 启用代理

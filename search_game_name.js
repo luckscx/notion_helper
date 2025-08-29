@@ -7,6 +7,9 @@ const config = require('./config');
 const clientId = config.igdb.clientId;
 const clientSecret = config.igdb.clientSecret;
 
+// 从配置文件获取RAWG API凭据
+const rawgApiKey = config.rawg?.apiKey;
+
 /**
  * 令牌管理类
  */
@@ -183,38 +186,6 @@ async function getGameEnglishName(chineseName) {
 }
 
 /**
- * 测试函数
- */
-async function testGameSearch() {
-  const testGames = [
-    '巫师3：狂猎',
-    '艾尔登法环',
-    '赛博朋克2077',
-    '只狼：影逝二度'
-  ];
-  
-  console.log('🎮 开始测试IGDB游戏搜索功能...\n');
-  
-  for (const chineseName of testGames) {
-    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    console.log(`🔍 搜索: ${chineseName}`);
-    
-    const englishName = await getGameEnglishName(chineseName);
-    
-    if (englishName) {
-      console.log(`✅ 中文名: ${chineseName}`);
-      console.log(`🎮 英文名: ${englishName}`);
-    } else {
-      console.log(`❌ 未找到 ${chineseName} 的英文名`);
-    }
-    
-    console.log(''); // 空行分隔
-  }
-  
-  console.log('🎮 测试完成!');
-}
-
-/**
  * 主函数 - 搜索单个游戏
  */
 async function main() {
@@ -246,9 +217,261 @@ if (require.main === module) {
   main().catch(console.error);
 }
 
+function sleep(ms) {
+  return new Promise((res) => setTimeout(res, ms));
+}
+
+function normalizeZh(name) {
+  if (!name) return "";
+  let n = name.trim();
+  const brackets = ["（", "）", "(", ")", "【", "】", "[", "]", "「", "」", "『", "』"];
+  for (const ch of brackets) n = n.replaceAll(ch, " ");
+  const suffix = ["豪华版", "完全版", "典藏版", "国服", "国际服", "重制版", "复刻", "年度版", "完整版"];
+  for (const s of suffix) n = n.replaceAll(s, "");
+  // 合并多空格
+  n = n.replace(/\s+/g, " ").trim();
+  return n;
+}
+
+
+/**
+ * Steam：中文关键词搜索拿 appid，再用 l=en 拉英文名，仅取 type=game
+ */
+async function steamEnTitle(zhName) {
+  if (!zhName) return [];
+  
+  console.log(`🔍 Steam搜索中文游戏: ${zhName}`);
+  
+  const searchUrl = "https://store.steampowered.com/api/storesearch?cc=CN&l=schinese&term=" + encodeURIComponent(zhName);
+  try {
+    const response = await superagent
+      .get(searchUrl)
+      .timeout(15000);
+    
+    const sr = response.body;
+    const items = sr?.items || [];
+    const results = [];
+    for (const it of items.slice(0, 5)) {
+      const appid = it?.id;
+      if (!appid) continue;
+      // 拉英文详情
+      const dUrl = "https://store.steampowered.com/api/appdetails?l=en&appids=" + encodeURIComponent(String(appid));
+      // 避免触发速率限制，适度 sleep
+      await sleep(200);
+      try {
+        const detailResponse = await superagent
+          .get(dUrl)
+          .timeout(15000);
+        
+        const jr = detailResponse.body;
+        const jd = jr?.[String(appid)] || {};
+        if (jd.success && jd.data && jd.data.type === "game") {
+          const title = jd.data.name;
+          if (title) {
+            results.push({
+              title,
+              source: "steam",
+              appid,
+              confidence: 0.75
+            });
+          }
+        }
+      } catch {
+        // 忽略单个 appid 错误
+      }
+    }
+    
+    if (results.length > 0) {
+      console.log(`✅ Steam找到 ${results.length} 个结果`);
+    } else {
+      console.log(`❌ Steam未找到匹配结果`);
+    }
+    
+    return results;
+  } catch (e) {
+    console.error('💥 Steam搜索失败:', e.message);
+    return [];
+  }
+}
+
+
+function dedupeAndRank(candidates) {
+  const tally = new Map();
+  for (const c of candidates) {
+    const key = (c.title || "").trim();
+    if (!key) continue;
+    if (!tally.has(key)) {
+      tally.set(key, { title: key, sources: new Set(), score: 0 });
+    }
+    const v = tally.get(key);
+    v.sources.add(c.source);
+    v.score += c.confidence ?? 0.5;
+  }
+  const out = [];
+  for (const v of tally.values()) {
+    const bonus = 0.2 * (v.sources.size - 1); // 多源加分
+    out.push({ title: v.title, sources: Array.from(v.sources), score: +(v.score + bonus).toFixed(3) });
+  }
+  out.sort((a, b) => b.score - a.score);
+  return out;
+}
+
+async function guessEnglishTitle(zhName) {
+  const q = normalizeZh(zhName);
+  const candidates = [];
+  const p = [];
+  
+  // 三个渠道都并发请求
+  p.push(steamEnTitle(q));
+  p.push(igdbEnTitle(q));
+  if (rawgApiKey) p.push(rawgEnTitle(q));
+
+  console.log(`\n🔍 开始搜索: ${zhName}`);
+  console.log(`📡 并发请求 ${p.length} 个数据源...`);
+
+  const results = await Promise.allSettled(p);
+  
+  // 收集所有结果
+  for (const r of results) {
+    if (r.status === "fulfilled" && Array.isArray(r.value)) {
+      candidates.push(...r.value);
+    }
+  }
+
+  // 去重和排序
+  const rankedResults = dedupeAndRank(candidates);
+  
+  // 打印所有可能性
+  console.log(`\n📊 搜索结果汇总:`);
+  if (rankedResults.length > 0) {
+    rankedResults.forEach((item, index) => {
+      console.log(`  ${index + 1}. ${item.title} (${item.sources.join(', ')}) - 置信度: ${item.score}`);
+    });
+    
+    // 返回最高置信度的结果
+    const bestResult = rankedResults[0];
+    console.log(`\n🏆 最佳匹配: ${bestResult.title} (置信度: ${bestResult.score})`);
+    return bestResult.title;
+  } else {
+    console.log(`\n❌ 未找到任何匹配结果`);
+    console.log(`🔄 返回原始中文名: ${zhName}`);
+    return zhName;
+  }
+}
+
+/**
+ * IGDB：使用中文名搜索获取英文游戏名
+ * @param {string} zhName - 中文游戏名
+ * @returns {Promise<Array>} 游戏候选列表
+ */
+async function igdbEnTitle(zhName) {
+  if (!zhName) return [];
+  
+  try {
+    console.log(`🔍 IGDB搜索中文游戏: ${zhName}`);
+    
+    // 获取有效的访问令牌
+    const accessToken = await tokenManager.getValidToken();
+    
+    // 搜索游戏
+    const apiUrl = 'https://api.igdb.com/v4/games';
+    const headers = {
+      'Client-ID': clientId,
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    };
+    
+    // 使用中文名搜索
+    const query = `search "${zhName}"; fields name,alternative_names; where version_parent = null;`;
+    
+    const response = await superagent
+      .post(apiUrl)
+      .set(headers)
+      .send(query);
+    
+    if (response.status === 200) {
+      const games = response.body;
+      
+      if (games && games.length > 0) {
+        const results = [];
+        for (const game of games.slice(0, 3)) { // 取前3个结果
+          if (game.name) {
+            results.push({
+              title: game.name,
+              source: "igdb",
+              confidence: 0.85
+            });
+          }
+        }
+        return results;
+      }
+    }
+    
+    return [];
+    
+  } catch (error) {
+    console.error('💥 IGDB搜索失败:', error.message);
+    return [];
+  }
+}
+
+/**
+ * RAWG：使用中文名搜索获取英文游戏名
+ * @param {string} zhName - 中文游戏名
+ * @returns {Promise<Array>} 游戏候选列表
+ */
+async function rawgEnTitle(zhName) {
+  if (!zhName || !rawgApiKey) return [];
+  
+  try {
+    console.log(`🔍 RAWG搜索中文游戏: ${zhName}`);
+    
+    // 构建搜索URL
+    const searchUrl = `https://api.rawg.io/api/games?key=${rawgApiKey}&search=${encodeURIComponent(zhName)}&page_size=5`;
+    
+    const response = await superagent
+      .get(searchUrl)
+      .timeout(15000);
+    
+    const data = response.body;
+    if (data && data.results && data.results.length > 0) {
+      const results = [];
+              for (const game of data.results.slice(0, 3)) { // 取前3个结果
+        if (game.name) {
+          results.push({
+            title: game.name,
+            source: "rawg",
+            confidence: 0.80
+          });
+        }
+      }
+      return results;
+    }
+    
+    return [];
+    
+  } catch (error) {
+    console.error('💥 RAWG搜索失败:', error.message);
+    return [];
+  }
+}
+
+// 示例
+async function main() {
+  const tests = [
+    "塞尔达传说 - 智慧的再现",
+    "小小梦魇",
+  ];
+  
+  console.log('🎮 测试多源英文标题猜测功能...\n');
+  
+  for (const t of tests) {
+    const result = await guessEnglishTitle(t);
+    console.log(`\n${'='.repeat(50)}`);
+  }
+}
+
 // 导出函数供其他模块使用
 module.exports = {
-  getGameEnglishName,
-  testGameSearch,
-  TokenManager
+  guessEnglishTitle
 };

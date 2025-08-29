@@ -118,10 +118,6 @@ async function getNotionDBList(start_cursor) {
         'property': 'MobyGames评分', 'number': {
           'is_empty': true,
         },
-      }, {
-        'property': '个人评分', 'number': {
-          'greater_than': 8,
-        },
       }],
     },
     sorts: [{
