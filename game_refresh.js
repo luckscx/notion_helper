@@ -6,15 +6,21 @@ const retry = require('async-await-retry');
 const process = require('process');
 const MobyGames = require('./mobygames');
 const ImageProxy = require('./image_proxy');
+const config = require('./config');
 
-const NOTION_KEY = process.env.NOTION_KEY;
-const databaseId = process.env.DATABASE_ID;
+const NOTION_KEY = config.notion.token;
+const databaseId = config.notion.gameDatabaseId;
 
-// 创建 Notion API 实例，使用我们自己的库
-const notion = new NotionAPI({
+
+const notion_config = {
   token: NOTION_KEY,
-  proxy: 'socks5://127.0.0.1:10808'
-});
+}
+
+if (config.proxy.enabled) {
+  notion_config.proxy = config.proxy.url;
+}
+
+const notion = new NotionAPI(notion_config);
 
 async function updateNotionPage(page_info, obj) {
   const pageId = page_info.id;
