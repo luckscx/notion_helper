@@ -8,9 +8,9 @@ const { guessEnglishTitle } = require("./search_game_name");
  */
 
 /**
- * 智能搜索游戏 - 自动判断中英文并获取完整游戏信息
+ * 智能搜索游戏 - 自动判断中英文并返回MobyGames URL
  * @param {string} gameTitle - 游戏标题（支持中文或英文）
- * @returns {Promise<Object>} 游戏信息对象
+ * @returns {Promise<Object>} 搜索结果对象，包含MobyGames URL
  */
 async function smartSearchGame(gameTitle, origin_english_name) {
   if (!gameTitle || gameTitle.trim() === '') {
@@ -19,8 +19,7 @@ async function smartSearchGame(gameTitle, origin_english_name) {
       message: '游戏标题不能为空',
       inputTitle: gameTitle,
       englishTitle: null,
-      mobygamesUrl: null,
-      gameInfo: null
+      mobygamesUrl: null
     };
   }
   
@@ -54,8 +53,7 @@ async function smartSearchGame(gameTitle, origin_english_name) {
         message: '搜索名称不能为空',
         inputTitle: gameTitle,
         englishTitle: null,
-        mobygamesUrl: null,
-        gameInfo: null
+        mobygamesUrl: null
       };
     }
     
@@ -69,8 +67,7 @@ async function smartSearchGame(gameTitle, origin_english_name) {
         message: `MobyGames搜索失败: ${searchResult.message}`,
         inputTitle: gameTitle,
         englishTitle: englishTitle,
-        mobygamesUrl: null,
-        gameInfo: null
+        mobygamesUrl: null
       };
     }
     
@@ -78,24 +75,9 @@ async function smartSearchGame(gameTitle, origin_english_name) {
     const mobygamesUrl = searchResult.bestMatch.url;
     console.log(`✅ 找到MobyGames链接: ${mobygamesUrl}`);
     
-    // 第三步：获取游戏详细信息
-    console.log('�� 获取游戏详细信息...');
-    const gameInfo = await getGameInfo(mobygamesUrl);
+    console.log(`✅ 智能搜索完成! 找到URL: ${mobygamesUrl}`);
     
-    if (!gameInfo) {
-      return {
-        success: false,
-        message: '获取游戏详细信息失败',
-        inputTitle: gameTitle,
-        englishTitle: englishTitle,
-        mobygamesUrl: mobygamesUrl,
-        gameInfo: null
-      };
-    }
-    
-    console.log(`�� 智能搜索完成! 游戏: ${gameInfo.name}`);
-    
-    // 返回完整的搜索结果
+    // 返回搜索结果，只包含URL相关信息
     return {
       success: true,
       message: '智能搜索成功',
@@ -104,8 +86,7 @@ async function smartSearchGame(gameTitle, origin_english_name) {
       isChineseInput: isChineseInput,
       mobygamesUrl: mobygamesUrl,
       searchResults: searchResult.results,
-      bestMatch: searchResult.bestMatch,
-      gameInfo: gameInfo
+      bestMatch: searchResult.bestMatch
     };
     
   } catch (error) {
@@ -116,8 +97,7 @@ async function smartSearchGame(gameTitle, origin_english_name) {
       message: `智能搜索错误: ${error.message}`,
       inputTitle: gameTitle,
       englishTitle: null,
-      mobygamesUrl: null,
-      gameInfo: null
+      mobygamesUrl: null
     };
   }
 }
@@ -138,60 +118,6 @@ function containsChinese(text) {
   
   return chineseRegex.test(text);
 }
-
-/**
- * 测试智能搜索功能
- * @param {string} testTitle - 测试游戏标题
- */
-async function testSmartSearch(testTitle = '寂静岭2',origin_english_name) {
-  try {
-    console.log('🚀 测试智能搜索功能...\n');
-    
-    const smartResult = await smartSearchGame(testTitle,origin_english_name);
-    
-    if (smartResult.success) {
-      console.log('\n🎉 智能搜索成功!');
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log(`🔍 输入标题: ${smartResult.inputTitle}`);
-      console.log(`🌍 英文标题: ${smartResult.englishTitle}`);
-      console.log(`🔗 MobyGames链接: ${smartResult.mobygamesUrl}`);
-      console.log(`📊 搜索结果数量: ${smartResult.searchResults.length}`);
-      console.log(`🏆 最佳匹配度: ${smartResult.bestMatch.matchScore}`);
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      
-      // 显示游戏详细信息
-      if (smartResult.gameInfo) {
-        console.log('\n�� 游戏详细信息:');
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.log(`📱 游戏名称: ${smartResult.gameInfo.name}`);
-        console.log(`⭐ MobyGames评分: ${smartResult.gameInfo.grade}`);
-        console.log(`�� 发行商: ${smartResult.gameInfo.publisher}`);
-        console.log(`👨‍�� 开发商: ${smartResult.gameInfo.developer}`);
-        console.log(`🎮 游戏平台: ${smartResult.gameInfo.platforms.join(', ')}`);
-        console.log(`📅 发布日期: ${smartResult.gameInfo.releaseDate}`);
-        console.log(`🎯 游戏类型: ${smartResult.gameInfo.gameTypes.join(', ')}`);
-        console.log(`🌐 官方网站: ${smartResult.gameInfo.officialSite}`);
-        console.log(`📝 游戏描述: ${smartResult.gameInfo.description.substring(0, 150)}...`);
-        console.log(`🖼️  封面图片: ${smartResult.gameInfo.image}`);
-        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      }
-      
-    } else {
-      console.log('\n❌ 智能搜索失败:', smartResult.message);
-      console.log(`   输入标题: ${smartResult.inputTitle}`);
-      if (smartResult.englishTitle) {
-        console.log(`   英文标题: ${smartResult.englishTitle}`);
-      }
-      if (smartResult.mobygamesUrl) {
-        console.log(`   MobyGames链接: ${smartResult.mobygamesUrl}`);
-      }
-    }
-    
-  } catch (error) {
-    console.error('�� 测试过程中发生错误:', error);
-  }
-}
-
 
 // 从原代码复制的getMeta函数
 function getMeta($) {
@@ -590,7 +516,7 @@ async function getGameInfo(url) {
       gameTypes: gameTypes,
       description: description,
       officialSite: officialSite,
-      url: url
+      mobygamesUrl: url
     };
     
     console.log(`✅ 成功提取游戏信息: ${gameInfo.name}`);
@@ -602,40 +528,6 @@ async function getGameInfo(url) {
       console.error(`   响应状态码: ${error.response.status}`);
     }
     return null;
-  }
-}
-
-/**
- * 测试函数：用于独立测试模块功能
- * @param {string} testUrl - 测试URL
- */
-async function testMobyGames(testUrl = 'https://www.mobygames.com/game/223432/pools/') {
-  try {
-    console.log('🚀 启动MobyGames模块测试...\n');
-    
-    const gameInfo = await getGameInfo(testUrl);
-    
-    if (gameInfo) {
-      console.log('\n🎮 游戏信息总结:');
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log(`📱 游戏名称: ${gameInfo.name}`);
-      console.log(`⭐ MobyGames评分: ${gameInfo.grade}`);
-      console.log(`🏢 发行商: ${gameInfo.publisher}`);
-      console.log(`👨‍💻 开发商: ${gameInfo.developer}`);
-      console.log(`🎮 游戏平台: ${gameInfo.platforms.join(', ')}`);
-      console.log(`📅 发布日期: ${gameInfo.releaseDate}`);
-      console.log(`🎯 游戏类型: ${gameInfo.gameTypes.join(', ')}`);
-      console.log(`🌐 官方网站: ${gameInfo.officialSite}`);
-      console.log(`📝 游戏描述: ${gameInfo.description.substring(0, 150)}...`);
-      console.log(`🖼️  封面图片: ${gameInfo.image}`);
-      console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.log('\n✅ 测试完成!');
-    } else {
-      console.log('❌ 测试失败: 无法获取游戏信息');
-    }
-    
-  } catch (error) {
-    console.error('💥 测试过程中发生错误:', error);
   }
 }
 
@@ -919,55 +811,11 @@ async function testSearchFunction(testTitle = 'Metal Gear') {
   }
 }
 
-/**
- * 批量测试智能搜索功能
- */
-async function testSmartSearchBatch() {
-  const testGames = [
-    '寂静岭2',           // 中文
-    'Metal Gear',       // 英文
-    '艾尔登法环',        // 中文
-    'Final Fantasy',    // 英文
-    '赛博朋克2077'       // 中文
-  ];
-  
-  console.log('🚀 开始批量测试智能搜索功能...\n');
-  
-  for (let i = 0; i < testGames.length; i++) {
-    const gameTitle = testGames[i];
-    console.log(`\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    console.log(`�� 测试 ${i + 1}/${testGames.length}: ${gameTitle}`);
-    console.log(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`);
-    
-    const result = await smartSearchGame(gameTitle);
-    
-    if (result.success) {
-      console.log(`✅ 成功: ${result.gameInfo.name}`);
-      console.log(`   英文名: ${result.englishTitle}`);
-      console.log(`   平台: ${result.gameInfo.platforms.join(', ')}`);
-    } else {
-      console.log(`❌ 失败: ${result.message}`);
-    }
-    
-    // 添加延迟避免请求过快
-    if (i < testGames.length - 1) {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-  }
-  
-  console.log('\n🎉 批量测试完成!');
-}
-
 // 更新导出模块
 module.exports = {
-  getGameInfo,
-  testMobyGames,
+  smartSearchGame,
   searchGameByTitle,
-  testSearchFunction,
-  smartSearchGame,        // 新增：智能搜索接口
-  testSmartSearch,        // 新增：测试智能搜索
-  testSmartSearchBatch,   // 新增：批量测试智能搜索
-  // 内部函数也导出，供高级用户使用
+  getGameInfo,
   getMeta,
   getPublisher,
   getPlatforms,

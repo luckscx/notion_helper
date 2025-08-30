@@ -22,14 +22,7 @@ const notion = new NotionAPI(notion_config);
 async function updateNotionPage(page_info, obj) {
   const pageId = page_info.id;
   try {
-    let properties;
-    
-    // 检查是否有预定义的属性（用于智能搜索的情况）
-    if (obj._properties) {
-      properties = obj._properties;
-    } else {
-      properties = await getPropertiesFromInfo(obj);
-    }
+    const properties = await getPropertiesFromInfo(obj);
     
     await retry(async () => {
       return await notion.updatePage(pageId, {
@@ -43,67 +36,91 @@ async function updateNotionPage(page_info, obj) {
 }
 
 async function pageWork(one) {
-  const prop = one.properties;
-  let page_url = prop['MobyGamesURL'].url;
-  if (MobyGames.isValidGameUrl(page_url)) {
-    console.log(`✅ 页面: ${page_url} 有效`);
+  try {
+    const prop = one.properties;
+    const pageInfo = await extractPageInfo(prop);
+    
+    // 如果没有URL，先尝试智能搜索获取
+    let finalUrl = pageInfo.pageUrl;
+    if (!finalUrl) {
+      console.log(`⚠️  ${pageInfo.pageName}: MobyGamesURL 为空，尝试使用智能搜索获取...`);
+      
+      try {
+        const smartResult = await MobyGames.smartSearchGame(pageInfo.pageName, pageInfo.englishName);
+        
+        if (smartResult.success && smartResult.mobygamesUrl) {
+          finalUrl = smartResult.mobygamesUrl;
+          console.log(`✅ 智能搜索成功获取MobyGames URL: ${finalUrl}`);
+          console.log(`   英文名: ${smartResult.englishTitle}`);
+        } else {
+          console.log(`❌ 智能搜索失败: ${smartResult.message}`);
+          console.log(`   需要手动添加 MobyGames 的URL: https://www.mobygames.com/game/...`);
+          return;
+        }
+      } catch (error) {
+        console.error(`❌ 智能搜索过程中发生错误: ${error.message}`);
+        console.log(`   需要手动添加 MobyGames 的URL: https://www.mobygames.com/game/...`);
+        return;
+      }
+    }
+    
+    // 统一处理：获取游戏信息并更新页面
+    if (finalUrl) {
+      console.log(`📡 获取游戏信息: ${finalUrl}`);
+      
+      try {
+        const gameInfo = await MobyGames.getGameInfo(finalUrl);
+        
+        if (gameInfo) {
+          console.log(`✅ 成功获取游戏信息: ${gameInfo.name}`);
+          await updateNotionPage(one, gameInfo);
+
+          console.log(`✅ 成功更新Notion 页面`);
+        } else {
+          console.log(`❌ 无法获取游戏信息: ${finalUrl}`);
+        }
+      } catch (error) {
+        console.error(`❌ 获取游戏信息过程中发生错误: ${error.message}`);
+      }
+    }
+  } catch (error) {
+    console.error('❌ pageWork 函数执行失败:', error.message);
+    console.error('错误详情:', error);
+    console.error('页面ID:', one.id);
+  }
+}
+
+// 提取页面基本信息
+async function extractPageInfo(prop) {
+  let pageUrl = prop['MobyGamesURL']?.url;
+  
+  if (MobyGames.isValidGameUrl(pageUrl)) {
+    console.log(`✅ 页面: ${pageUrl} 有效`);
   } else {
-    page_url = null;
+    pageUrl = null;
   }
   
   // 获取页面名称用于日志
   let pageName = '未知页面';
   let englishName = null;
-  if (prop['Name'] && prop['Name'].title && prop['Name'].title[0]) {
+  
+  if (prop['Name']?.title?.[0]) {
     pageName = prop['Name'].title[0].plain_text;
   }
-  if (prop['English Name'] && prop['English Name'].rich_text && prop['English Name'].rich_text[0]) {
+  if (prop['English Name']?.rich_text?.[0]) {
     englishName = prop['English Name'].rich_text[0].plain_text;
   }
   
   console.log(`🔍 处理页面: ${pageName}`);
   
-  // 检查MobyGamesURL
-  if (!page_url) {
-    console.log(`⚠️  ${pageName}: MobyGamesURL 为空，尝试使用智能搜索获取游戏信息...`);
-    
-    // 使用智能搜索获取游戏信息
-    const smartResult = await MobyGames.smartSearchGame(pageName, englishName);
-    
-    if (smartResult.success && smartResult.gameInfo) {
-      console.log(`✅ 智能搜索成功获取游戏信息: ${smartResult.gameInfo.name}`);
-      console.log(`   英文名: ${smartResult.englishTitle}`);
-      console.log(`   MobyGames链接: ${smartResult.mobygamesUrl}`);
-      
-      // 更新Notion页面，同时添加MobyGamesURL
-      const updatedProperties = await getPropertiesFromInfo(smartResult.gameInfo);
-      updatedProperties['MobyGamesURL'] = {
-        'url': smartResult.mobygamesUrl
-      };
-      
-      await updateNotionPage(one, {
-        ...smartResult.gameInfo,
-        _properties: updatedProperties
-      });
-      
-      console.log(`✅ 成功更新页面并添加MobyGamesURL`);
-    } else {
-      console.log(`❌ 智能搜索失败: ${smartResult.message}`);
-      console.log(`   需要手动添加 MobyGames 的URL: https://www.mobygames.com/game/...`);
-    }
-    return;
-  }
-  
-  console.log(`📡 获取游戏信息: ${page_url}`);
-  
-  const page_info = await getGameInfo(page_url);
-  if (page_info) {
-    console.log(`✅ 成功获取游戏信息: ${page_info.name}`);
-    await updateNotionPage(one, page_info);
-  } else {
-    console.log(`❌ 无法获取游戏信息: ${page_url}`);
-  }
+  return {
+    pageUrl,
+    pageName,
+    englishName
+  };
 }
+
+
 
 const batch_size = 1;
 
@@ -127,50 +144,9 @@ async function getNotionDBList(start_cursor) {
   return await notion.queryDatabase(databaseId, query_obj);
 }
 
-// getMeta函数已移至mobygames.js模块
-
-async function getGameInfo(url) {
-  if (!url) {
-    return null;
-  }
-  
-  try {
-    // 使用新的MobyGames模块获取游戏信息
-    const gameInfo = await MobyGames.getGameInfo(url);
-    
-    if (gameInfo) {
-      // 转换为原有格式以保持兼容性
-      const info = {
-        name: gameInfo.name,
-        image: gameInfo.image,
-        grade: gameInfo.grade,
-        developer: gameInfo.developer,
-        publisher: gameInfo.publisher,
-        // 新增字段
-        platforms: gameInfo.platforms,
-        releaseDate: gameInfo.releaseDate,
-        gameTypes: gameInfo.gameTypes,
-        description: gameInfo.description,
-        officialSite: gameInfo.officialSite
-      };
-      
-      console.log('✅ 游戏信息:', info);
-      return info;
-    }
-    
-    return null;
-  } catch (error) {
-    console.error('❌ 获取游戏信息失败:', error.message);
-    console.error('load url error %s', url);
-    return null;
-  }
-}
-
-
-// getPublisher函数已移至mobygames.js模块
 
 async function getPropertiesFromInfo(Info) {
-  let {name, image, grade, publisher, developer, releaseDate, gameTypes, officialSite} = Info;
+  let {name, image, grade, publisher, developer, releaseDate, gameTypes, officialSite, mobygamesUrl} = Info;
   const title = name;
   
   // 处理分数，将"n/a"转换为0
@@ -225,6 +201,9 @@ async function getPropertiesFromInfo(Info) {
         'name': publisher || 'none',
       },
     },
+    'MobyGamesURL': {
+      'url': mobygamesUrl,
+    },
     '开发商': {
       'select': {
         'name': developer || 'none',
@@ -249,6 +228,7 @@ async function getPropertiesFromInfo(Info) {
     // 使用处理后的图片URL（短链接）
     properties['封面图'] = {
       'files': [{
+        name: "logo.jpg",
         type: 'external', 
         external: {
           url: processedImage,
