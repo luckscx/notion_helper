@@ -272,7 +272,7 @@ async function steamEnTitle(zhName) {
               title,
               source: "steam",
               appid,
-              confidence: 0.75
+              confidence: 0.90
             });
           }
         }

@@ -1,6 +1,6 @@
 const cheerio = require('cheerio');
 const superagent = require('superagent');
-const { getGameEnglishName } = require("./search_game_name");
+const { guessEnglishTitle } = require("./search_game_name");
 
 /**
  * MobyGames游戏信息提取模块
@@ -39,7 +39,7 @@ async function smartSearchGame(gameTitle, origin_english_name) {
       isChineseInput = true;
       console.log('🔍 检测到中文输入，开始获取英文名称...');
       
-      englishTitle  = await getGameEnglishName(gameTitle);
+      englishTitle  = await guessEnglishTitle(gameTitle);
       
       if (englishTitle) {
         console.log(`✅ 中文转英文成功: ${gameTitle} → ${englishTitle}`);
@@ -254,9 +254,7 @@ function getPublisher($) {
       .replace(/BV/gi, '')             // 去掉 "BV"
       .replace(/S\.A\./gi, '')         // 去掉 "S.A."
       .replace(/S\.p\.A\./gi, '')      // 去掉 "S.p.A."
-      .replace(/^\s*,\s*/, '')             // 去掉开头的逗号
-      .replace(/\s*,\s*$/, '')             // 去掉结尾的逗号
-      .replace(/\s*,\s*/, ' ')             // 将中间的多个逗号替换为单个空格
+      .replace(/,/g, '')                // 去掉逗号
       .replace(/\s+/g, ' ')                // 将多个空格替换为单个空格
       .trim();                              // 去掉首尾空格
   };

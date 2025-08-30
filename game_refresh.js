@@ -14,10 +14,7 @@ const databaseId = config.notion.gameDatabaseId;
 
 const notion_config = {
   token: NOTION_KEY,
-}
-
-if (config.proxy.enabled) {
-  notion_config.proxy = config.proxy.url;
+  proxy: config.proxy.enabled ? config.proxy.url : null,
 }
 
 const notion = new NotionAPI(notion_config);
@@ -173,7 +170,7 @@ async function getGameInfo(url) {
 // getPublisher函数已移至mobygames.js模块
 
 async function getPropertiesFromInfo(Info) {
-  let {name, image, grade, publisher, developer, platforms, releaseDate, gameTypes, description, officialSite} = Info;
+  let {name, image, grade, publisher, developer, releaseDate, gameTypes, officialSite} = Info;
   const title = name;
   
   // 处理分数，将"n/a"转换为0
@@ -189,33 +186,27 @@ async function getPropertiesFromInfo(Info) {
     }
   }
   
-  // 处理图片URL，确保符合Notion的长度限制
+  // 处理图片URL，当超过100个字符时使用Notion文件上传接口
   let processedImage = image;
+  let uploadedFileId = null;
+  
   if (image && image.length > 100) {
     try {
-      console.log(`📸 处理长图片URL: ${image.length} 字符`);
+      console.log(`📸 图片URL过长 (${image.length} 字符)，使用Notion文件上传接口`);
       
-      // 优先使用Grissom自建短链接服务
-      processedImage = await ImageProxy.processImageUrl(image, 'grissom');
+      // 使用Notion的uploadFileFromUrl接口上传文件
+      const uploadResult = await notion.uploadFileFromUrl(image);
       
-      if (processedImage && processedImage.length <= 100) {
-        console.log(`✅ 图片URL处理成功: ${processedImage.length} 字符`);
+      if (uploadResult && uploadResult.file_id) {
+        uploadedFileId = uploadResult.file_id;
+        console.log(`✅ 图片上传到Notion成功！文件ID: ${uploadedFileId}`);
+        console.log(`   文件名: ${uploadResult.upload_result.filename}`);
+        console.log(`   文件大小: ${uploadResult.upload_result.content_length} 字节`);
       } else {
-        console.warn(`⚠️  Grissom服务处理失败，尝试Cloudinary: ${processedImage ? processedImage.length : 0} 字符`);
-        // 如果Grissom服务失败，尝试Cloudinary
-        processedImage = await ImageProxy.processImageUrl(image, 'cloudinary', { cloudName: 'demo' });
-        
-        if (processedImage && processedImage.length <= 100) {
-          console.log(`✅ Cloudinary处理成功: ${processedImage.length} 字符`);
-        } else {
-          console.warn(`⚠️  Cloudinary也失败，尝试TinyURL: ${processedImage ? processedImage.length : 0} 字符`);
-          // 最后尝试TinyURL
-          processedImage = await ImageProxy.processImageUrl(image, 'tinyurl');
-        }
+        console.error(`❌ Notion文件上传失败:`, uploadResult.message);
       }
     } catch (error) {
-      console.error(`❌ 图片URL处理失败:`, error.message);
-      processedImage = image; // 失败时使用原URL
+      console.error(`❌ Notion文件上传失败:`, error.message);
     }
   }
   
@@ -241,15 +232,30 @@ async function getPropertiesFromInfo(Info) {
     },
   };
   
-  // 只有当图片URL存在且不为空时才添加封面图
-  if (processedImage) {
+  // 设置封面图字段
+  if (uploadedFileId) {
+    // 使用上传到Notion的文件ID
     properties['封面图'] = {
       'files': [{
-        name: name || '封面图', type: 'external', external: {
+        name: "logo.jpg",
+        type: 'file_upload', 
+        file_upload: {
+          id: uploadedFileId,
+        },
+      }],
+    };
+    console.log(`✅ 封面图使用Notion文件ID: ${uploadedFileId}`);
+  } else if (processedImage) {
+    // 使用处理后的图片URL（短链接）
+    properties['封面图'] = {
+      'files': [{
+        type: 'external', 
+        external: {
           url: processedImage,
         },
       }],
     };
+    console.log(`✅ 封面图使用处理后的URL: ${processedImage.length} 字符`);
   }
   
   if (releaseDate) {

@@ -496,6 +496,319 @@ class NotionAPI {
   async getUsers() {
     return this.get('/v1/users');
   }
+
+  /**
+   * 创建文件上传对象
+   * @returns {Promise} 文件上传对象信息，包含 id 和 upload_url
+   */
+  async createFileUpload() {
+    return this.post('/v1/file_uploads', {});
+  }
+
+  /**
+   * 上传文件内容
+   * @param {string} fileUploadId - 文件上传对象ID
+   * @param {Buffer|string} fileContent - 文件内容
+   * @param {string} filename - 文件名
+   * @param {string} contentType - 文件类型
+   * @returns {Promise} 上传结果，包含文件ID
+   */
+  async uploadFile(fileUploadId, fileContent, filename, contentType = null) {
+    return new Promise((resolve, reject) => {
+      const url = new URL(`/v1/file_uploads/${fileUploadId}/send`, this.baseURL);
+      
+      // 构建 multipart/form-data 边界
+      const boundary = '----WebKitFormBoundary' + Math.random().toString(16).substr(2, 8);
+      
+      // 构建 multipart 数据
+      let postData = Buffer.alloc(0);
+      
+      // 添加文件字段
+      let fileField = `--${boundary}\r\n` +
+        `Content-Disposition: form-data; name="file"; filename="${filename}"\r\n`;
+      
+      if (contentType) {
+        fileField += `Content-Type: ${contentType}\r\n`;
+      }
+      
+      fileField += `\r\n`;
+      
+      postData = Buffer.concat([
+        postData,
+        Buffer.from(fileField, 'utf8'),
+        Buffer.isBuffer(fileContent) ? fileContent : Buffer.from(fileContent, 'utf8'),
+        Buffer.from('\r\n', 'utf8')
+      ]);
+      
+      // 添加结束边界
+      postData = Buffer.concat([
+        postData,
+        Buffer.from(`--${boundary}--\r\n`, 'utf8')
+      ]);
+
+      // 请求配置
+      const requestOptions = {
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname + url.search,
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.token}`,
+          'Notion-Version': this.version,
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+          'Content-Length': postData.length,
+          'User-Agent': 'NotionAPI/1.0.0'
+        },
+        agent: this.proxyAgent,
+        timeout: 60000, // 文件上传需要更长的超时时间
+        keepAlive: true,
+        keepAliveMsecs: 1000,
+        maxSockets: 1
+      };
+
+      // 创建请求
+      const req = https.request(requestOptions, (res) => {
+        let responseData = '';
+        
+        res.on('data', (chunk) => {
+          responseData += chunk;
+        });
+        
+        res.on('end', () => {
+          try {
+            const parsedData = responseData ? JSON.parse(responseData) : null;
+            
+            if (res.statusCode >= 200 && res.statusCode < 300) {
+              resolve({
+                status: res.statusCode,
+                headers: res.headers,
+                data: parsedData,
+                file_id: parsedData?.id // 返回文件ID
+              });
+            } else {
+              reject({
+                status: res.statusCode,
+                headers: res.headers,
+                data: parsedData,
+                message: `HTTP ${res.statusCode}: ${res.statusMessage}`
+              });
+            }
+          } catch (error) {
+            reject({
+              status: res.statusCode,
+              headers: res.headers,
+              data: responseData,
+              error: error.message
+            });
+          }
+        });
+      });
+
+      req.on('error', (error) => {
+        reject({
+          error: error.message,
+          code: error.code,
+          message: error.message,
+          originalError: error.message,
+          proxyUsed: !!this.proxyAgent
+        });
+      });
+
+      // 设置超时
+      req.setTimeout(60000, () => {
+        req.destroy();
+        reject({
+          error: '文件上传超时',
+          code: 'TIMEOUT'
+        });
+      });
+
+      // 发送数据
+      req.write(postData);
+      req.end();
+    });
+  }
+
+  /**
+   * 完整的文件上传流程（创建上传对象 + 上传文件）
+   * @param {Buffer|string} fileContent - 文件内容
+   * @param {string} filename - 文件名
+   * @param {string} contentType - 文件类型
+   * @returns {Promise} 上传结果，包含文件ID
+   */
+  async uploadFileComplete(fileContent, filename, contentType = null) {
+    try {
+      // 步骤1: 创建文件上传对象
+      console.log('📤 创建文件上传对象...');
+      const uploadObject = await this.createFileUpload();
+      const fileUploadId = uploadObject.data.id;
+      console.log(`✅ 文件上传对象创建成功，ID: ${fileUploadId}`);
+      
+      // 步骤2: 上传文件内容
+      console.log('📤 上传文件内容...');
+      const uploadResult = await this.uploadFile(fileUploadId, fileContent, filename, contentType);
+      console.log(`✅ 文件上传成功，文件ID: ${uploadResult.file_id}`);
+      
+      return {
+        success: true,
+        file_id: uploadResult.file_id,
+        upload_object: uploadObject.data,
+        upload_result: uploadResult.data
+      };
+    } catch (error) {
+      console.error('❌ 文件上传失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 从URL下载文件并上传到Notion
+   * @param {string} fileUrl - 文件URL
+   * @param {string} filename - 文件名（可选，如果不提供则从URL中提取）
+   * @param {string} contentType - 文件类型（可选，如果不提供则自动检测）
+   * @param {object} options - 额外选项
+   * @returns {Promise} 上传结果，包含文件ID
+   */
+  async uploadFileFromUrl(fileUrl, filename = null, contentType = null, options = {}) {
+    try {
+      // 如果没有提供文件名，从URL中提取
+      if (!filename) {
+        const url = new URL(fileUrl);
+        filename = url.pathname.split('/').pop() || 'downloaded_file';
+      }
+
+      // 如果没有提供文件类型，尝试从URL或文件名推断
+      if (!contentType) {
+        const url = new URL(fileUrl);
+        const pathname = url.pathname.toLowerCase();
+        if (pathname.endsWith('.jpg') || pathname.endsWith('.jpeg')) {
+          contentType = 'image/jpeg';
+        } else if (pathname.endsWith('.png')) {
+          contentType = 'image/png';
+        } else if (pathname.endsWith('.gif')) {
+          contentType = 'image/gif';
+        } else if (pathname.endsWith('.webp')) {
+          contentType = 'image/webp';
+        } else if (pathname.endsWith('.pdf')) {
+          contentType = 'application/pdf';
+        } else if (pathname.endsWith('.txt')) {
+          contentType = 'text/plain';
+        } else if (pathname.endsWith('.md')) {
+          contentType = 'text/markdown';
+        } else {
+          contentType = 'application/octet-stream';
+        }
+      }
+
+      console.log(`🌐 正在从 ${fileUrl} 下载文件...`);
+      console.log(`📁 文件名: ${filename}`);
+      console.log(`📋 文件类型: ${contentType}`);
+
+      // 下载文件内容
+      const fileBuffer = await this._downloadFileFromUrl(fileUrl, options);
+      console.log(`✅ 文件下载成功！大小: ${fileBuffer.length} 字节`);
+
+      // 使用现有的完整上传流程
+      const result = await this.uploadFileComplete(fileBuffer, filename, contentType);
+      
+      return {
+        ...result,
+        source_url: fileUrl,
+        downloaded_size: fileBuffer.length
+      };
+
+    } catch (error) {
+      console.error('❌ 从URL下载并上传文件失败:', error);
+      throw error;
+    }
+  }
+
+  /**
+   * 从URL下载文件的内部方法
+   * @param {string} url - 文件URL
+   * @param {object} options - 下载选项
+   * @returns {Promise<Buffer>} 文件内容的Buffer
+   */
+  async _downloadFileFromUrl(url, options = {}) {
+    return new Promise((resolve, reject) => {
+      const timeout = options.timeout || 60000; // 默认60秒超时
+      const maxSize = options.maxSize || 50 * 1024 * 1024; // 默认50MB最大文件大小
+      
+      const urlObj = new URL(url);
+      const protocol = urlObj.protocol === 'https:' ? https : require('http');
+      
+      const requestOptions = {
+        hostname: urlObj.hostname,
+        port: urlObj.port || (urlObj.protocol === 'https:' ? 443 : 80),
+        path: urlObj.pathname + urlObj.search,
+        method: 'GET',
+        headers: {
+          'User-Agent': 'NotionAPI/1.0.0',
+          'Accept': '*/*',
+          'Accept-Encoding': 'gzip, deflate',
+          'Connection': 'keep-alive'
+        },
+        agent: this.proxyAgent, // 使用配置的代理
+        timeout: timeout,
+        keepAlive: true,
+        keepAliveMsecs: 1000,
+        maxSockets: 1
+      };
+
+      const request = protocol.request(requestOptions, (response) => {
+        // 检查响应状态
+        if (response.statusCode !== 200) {
+          reject(new Error(`HTTP ${response.statusCode}: ${response.statusMessage}`));
+          return;
+        }
+
+        // 检查Content-Length（如果可用）
+        const contentLength = response.headers['content-length'];
+        if (contentLength && parseInt(contentLength) > maxSize) {
+          reject(new Error(`文件过大: ${contentLength} 字节，最大允许: ${maxSize} 字节`));
+          return;
+        }
+
+        const chunks = [];
+        let totalSize = 0;
+
+        response.on('data', (chunk) => {
+          totalSize += chunk.length;
+          
+          // 检查文件大小限制
+          if (totalSize > maxSize) {
+            request.destroy();
+            reject(new Error(`文件过大: ${totalSize} 字节，最大允许: ${maxSize} 字节`));
+            return;
+          }
+          
+          chunks.push(chunk);
+        });
+
+        response.on('end', () => {
+          if (totalSize === 0) {
+            reject(new Error('下载的文件为空'));
+            return;
+          }
+          
+          const buffer = Buffer.concat(chunks);
+          resolve(buffer);
+        });
+      });
+
+      request.on('error', (error) => {
+        reject(new Error(`下载失败: ${error.message}`));
+      });
+
+      // 设置超时
+      request.setTimeout(timeout, () => {
+        request.destroy();
+        reject(new Error('下载超时'));
+      });
+
+      request.end();
+    });
+  }
 }
 
 module.exports = NotionAPI;
