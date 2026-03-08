@@ -122,11 +122,11 @@ async function extractPageInfo(prop) {
 
 
 
-const batch_size = 1;
+const batch_size = 3;
 
 async function getNotionDBList(start_cursor) {
   const query_obj = {
-    page_size: batch_size,
+    page_size: 10,
     filter: {
       'and': [{
         'property': 'MobyGames评分', 'number': {

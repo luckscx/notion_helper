@@ -1,7 +1,18 @@
 const superagent = require('superagent');
 const fs = require('fs');
 const path = require('path');
+const { HttpsProxyAgent } = require('https-proxy-agent');
+const { SocksProxyAgent } = require('socks-proxy-agent');
 const config = require('./config');
+
+// 构建代理 agent（复用 config.proxy 配置）
+let proxyAgent = null;
+if (config.proxy?.enabled && config.proxy?.url) {
+  const proxyUrl = config.proxy.url;
+  proxyAgent = proxyUrl.startsWith('socks')
+    ? new SocksProxyAgent(proxyUrl)
+    : new HttpsProxyAgent(proxyUrl);
+}
 
 // 从配置文件获取IGDB API凭据
 const clientId = config.igdb.clientId;
@@ -84,6 +95,7 @@ class TokenManager {
     try {
       const authResponse = await superagent
         .post(authUrl)
+        .agent(proxyAgent)
         .query(authParams);
 
       const accessToken = authResponse.body.access_token;
@@ -150,6 +162,7 @@ async function getGameEnglishName(chineseName) {
     console.log('🔍 搜索游戏信息...');
     const response = await superagent
       .post(apiUrl)
+      .agent(proxyAgent)
       .set(headers)
       .send(query);
     
@@ -217,10 +230,6 @@ if (require.main === module) {
   main().catch(console.error);
 }
 
-function sleep(ms) {
-  return new Promise((res) => setTimeout(res, ms));
-}
-
 function normalizeZh(name) {
   if (!name) return "";
   let n = name.trim();
@@ -246,40 +255,27 @@ async function steamEnTitle(zhName) {
   try {
     const response = await superagent
       .get(searchUrl)
+      .agent(proxyAgent)
       .timeout(15000);
     
     const sr = response.body;
     const items = sr?.items || [];
-    const results = [];
-    for (const it of items.slice(0, 5)) {
-      const appid = it?.id;
-      if (!appid) continue;
-      // 拉英文详情
+    const appids = items.slice(0, 5).map((it) => it?.id).filter(Boolean);
+    const detailRequests = appids.map(async (appid) => {
       const dUrl = "https://store.steampowered.com/api/appdetails?l=en&appids=" + encodeURIComponent(String(appid));
-      // 避免触发速率限制，适度 sleep
-      await sleep(200);
       try {
-        const detailResponse = await superagent
-          .get(dUrl)
-          .timeout(15000);
-        
-        const jr = detailResponse.body;
-        const jd = jr?.[String(appid)] || {};
-        if (jd.success && jd.data && jd.data.type === "game") {
-          const title = jd.data.name;
-          if (title) {
-            results.push({
-              title,
-              source: "steam",
-              appid,
-              confidence: 0.90
-            });
-          }
+        const detailResponse = await superagent.get(dUrl).agent(proxyAgent).timeout(15000);
+        const jd = detailResponse.body?.[String(appid)] || {};
+        if (jd.success && jd.data && jd.data.type === "game" && jd.data.name) {
+          return { title: jd.data.name, source: "steam", appid, confidence: 0.90 };
         }
       } catch {
         // 忽略单个 appid 错误
       }
-    }
+      return null;
+    });
+    const settled = await Promise.all(detailRequests);
+    const results = settled.filter(Boolean);
     
     if (results.length > 0) {
       console.log(`✅ Steam找到 ${results.length} 个结果`);
@@ -386,12 +382,13 @@ async function igdbEnTitle(zhName) {
     
     const response = await superagent
       .post(apiUrl)
+      .agent(proxyAgent)
       .set(headers)
       .send(query);
-    
+
     if (response.status === 200) {
       const games = response.body;
-      
+
       if (games && games.length > 0) {
         const results = [];
         for (const game of games.slice(0, 3)) { // 取前3个结果
@@ -431,9 +428,8 @@ async function rawgEnTitle(zhName) {
     
     const response = await superagent
       .get(searchUrl)
+      .agent(proxyAgent)
       .timeout(15000);
-    
-    const data = response.body;
     if (data && data.results && data.results.length > 0) {
       const results = [];
               for (const game of data.results.slice(0, 3)) { // 取前3个结果
