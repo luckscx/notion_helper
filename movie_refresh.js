@@ -8,16 +8,17 @@ const process = require('process');
 
 const NOTION_KEY = process.env.NOTION_KEY;
 const databaseId = process.env.DATABASE_ID;
+const DOUBAN_COOKIE = process.env.DOUBAN_COOKIE || '';
 
 const notion = new Client({auth: NOTION_KEY, logLevel: LogLevel.WARN});
 
-async function updateNotionPage(page_info, obj) {
+async function updateNotionPage(page_info, obj, douban_url) {
   const pageId = page_info.id;
   try {
     await retry(async () => {
       return await notion.pages.update({
         page_id: pageId,
-        properties: getPropertiesFromInfo(obj),
+        properties: getPropertiesFromInfo(obj, douban_url),
       });
     }, null, {retriesMax: 4, interval: 1000, exponential: true, factor: 3, jitter: 100});
   } catch (err) {
@@ -26,15 +27,53 @@ async function updateNotionPage(page_info, obj) {
   }
 }
 
+async function searchDoubanUrl(title) {
+  if (!title) return null;
+  try {
+    const res = await superagent
+      .get('https://movie.douban.com/j/subject_suggest')
+      .query({q: title})
+      .set('Referer', 'https://movie.douban.com')
+      .set('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+      .set('Cookie', DOUBAN_COOKIE);
+    const results = res.body;
+    if (results && results.length > 0) {
+      // 取第一个 type 为 movie 的结果
+      const movie = results.find((r) => r.type === 'movie') || results[0];
+      // 去掉 suggest 参数，返回纯净 URL
+      const url = movie.url.replace(/\?suggest=.*$/, '');
+      console.log('douban search "%s" -> %s', title, url);
+      return url;
+    }
+  } catch (err) {
+    console.log('douban search error for "%s": %s', title, err.message);
+  }
+  return null;
+}
+
 async function pageWork(one) {
   const prop = one.properties;
-  const page_url = prop['条目链接'].url;
+  let page_url = prop['条目链接'].url;
+  let searched_url = null;
+
+  if (!page_url) {
+    const titleProp = prop['标题'];
+    const title = titleProp && titleProp.title && titleProp.title[0]
+      ? titleProp.title[0].plain_text
+      : null;
+    page_url = await searchDoubanUrl(title);
+    if (!page_url) {
+      console.log('no url and search failed for: %s', title);
+      return;
+    }
+    searched_url = page_url;
+  }
+
   const douban_info = await getMovieInfo(page_url);
   if (douban_info) {
-    await updateNotionPage(one, douban_info);
+    await updateNotionPage(one, douban_info, searched_url);
   } else {
     console.log('not get page info for %s', page_url);
-    console.log(prop['标题']);
   }
 }
 
@@ -139,15 +178,11 @@ function getMeta($) {
 
 const getDirector = ($) => {
   const director = $('#info>span').eq('0').text();
-  console.log(director);
-  let arr = director.split(':');
+  const arr = director.split(':');
   if (arr[0] == '导演') {
-    console.log(arr);
-    arr = arr[1].split('/');
-    console.log(arr);
-    return arr;
+    return arr[1].split('/').map((s) => s.trim());
   } else {
-    return ['无']
+    return ['无'];
   }
 };
 
@@ -156,7 +191,12 @@ async function getMovieInfo(url) {
     return null;
   }
   try {
-    const html = await superagent.get(url);
+    const html = await superagent
+      .get(url)
+      .set('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+      .set('Referer', 'https://movie.douban.com')
+      .set('Accept-Language', 'zh-CN,zh;q=0.9')
+      .set('Cookie', DOUBAN_COOKIE);
     if (!html) {
       return null;
     }
@@ -181,11 +221,11 @@ async function getMovieInfo(url) {
   }
 }
 
-function getPropertiesFromInfo(Info) {
+function getPropertiesFromInfo(Info, douban_url) {
   let {name, picurl, grade, country, director, init_date, type, rating_people, seconds} = Info;
   const title = name;
   grade = parseFloat(grade);
-  return {
+  const props = {
     '标题': {
       title: [{type: 'text', text: {content: title}}],
     },
@@ -236,6 +276,10 @@ function getPropertiesFromInfo(Info) {
       ],
     },
   };
+  if (douban_url) {
+    props['条目链接'] = {'url': douban_url};
+  }
+  return props;
 }
 
 async function main() {

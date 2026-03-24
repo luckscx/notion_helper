@@ -49,3 +49,6 @@ build/
 book.sh
 game.sh
 habit_tracker.sh
+movie.sh
+daily.sh
+todo.sh
