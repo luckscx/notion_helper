@@ -49,6 +49,14 @@ module.exports = {
     apiKey: 'your_rawg_api_key_here'
   },
 
+  // 豆瓣配置
+  douban: {
+    // 登录豆瓣后从浏览器 Cookie 中复制完整 Cookie 字符串
+    cookie: '',
+    // 浏览器导出的 Cookie JSON 文件
+    cookieFile: 'douban_cookie.json',
+  },
+
   // 代理配置 (可选，用于网络访问)
   proxy: {
     // 启用代理

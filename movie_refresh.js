@@ -1,23 +1,66 @@
-const {Client, LogLevel} = require('@notionhq/client');
 const cheerio = require('cheerio');
 const superagent = require('superagent');
 const Promise = require('bluebird');
 const retry = require('async-await-retry');
 const moment = require('moment');
 const process = require('process');
+const fs = require('fs');
+const path = require('path');
+const {HttpsProxyAgent} = require('https-proxy-agent');
+const {SocksProxyAgent} = require('socks-proxy-agent');
+const NotionAPI = require('./notion_api');
+const config = require('./config');
 
-const NOTION_KEY = process.env.NOTION_KEY;
-const databaseId = process.env.DATABASE_ID;
-const DOUBAN_COOKIE = process.env.DOUBAN_COOKIE || '';
+const NOTION_KEY = process.env.NOTION_KEY || config.notion.token;
+const databaseId = process.env.DATABASE_ID || config.notion.movieDatabaseId;
 
-const notion = new Client({auth: NOTION_KEY, logLevel: LogLevel.WARN});
+function loadDoubanCookie() {
+  if (process.env.DOUBAN_COOKIE) return process.env.DOUBAN_COOKIE;
+  if (config.douban?.cookie) return config.douban.cookie;
+  const cookieFile = config.douban?.cookieFile;
+  if (!cookieFile) return '';
+  try {
+    const cookies = JSON.parse(fs.readFileSync(
+      path.resolve(__dirname, cookieFile), 'utf8'));
+    if (!Array.isArray(cookies)) return '';
+    return cookies
+      .filter((cookie) => cookie && cookie.name && cookie.value)
+      .map((cookie) => `${cookie.name}=${cookie.value}`)
+      .join('; ');
+  } catch (err) {
+    console.warn('读取豆瓣 Cookie 文件失败: %s', err.message);
+    return '';
+  }
+}
+
+const DOUBAN_COOKIE = loadDoubanCookie();
+const USER_AGENT = 'Mozilla/5.0 (X11; Linux x86_64) ' +
+  'AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
+const proxyUrl = config.proxy?.enabled ? config.proxy.url : null;
+let proxyAgent = null;
+if (proxyUrl) {
+  if (proxyUrl.startsWith('socks')) {
+    proxyAgent = new SocksProxyAgent(proxyUrl);
+  } else {
+    proxyAgent = new HttpsProxyAgent(proxyUrl);
+  }
+}
+
+if (!NOTION_KEY || !databaseId) {
+  throw new Error('缺少 Notion 配置：NOTION_KEY 或电影数据库 ID');
+}
+
+const notion = new NotionAPI({
+  token: NOTION_KEY,
+  version: config.notion.version,
+  proxy: proxyUrl,
+});
 
 async function updateNotionPage(page_info, obj, douban_url) {
   const pageId = page_info.id;
   try {
     await retry(async () => {
-      return await notion.pages.update({
-        page_id: pageId,
+      return await notion.updatePage(pageId, {
         properties: getPropertiesFromInfo(obj, douban_url),
       });
     }, null, {retriesMax: 4, interval: 1000, exponential: true, factor: 3, jitter: 100});
@@ -34,8 +77,10 @@ async function searchDoubanUrl(title) {
       .get('https://movie.douban.com/j/subject_suggest')
       .query({q: title})
       .set('Referer', 'https://movie.douban.com')
-      .set('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-      .set('Cookie', DOUBAN_COOKIE);
+      .set('User-Agent', USER_AGENT)
+      .set('Cookie', DOUBAN_COOKIE)
+      .agent(proxyAgent)
+      .timeout(15000);
     const results = res.body;
     if (results && results.length > 0) {
       // 取第一个 type 为 movie 的结果
@@ -56,11 +101,15 @@ async function pageWork(one) {
   let page_url = prop['条目链接'].url;
   let searched_url = null;
 
+  const titleProp = prop['标题'];
+  let title = null;
+  if (titleProp && titleProp.title && titleProp.title[0]) {
+    title = titleProp.title[0].plain_text;
+  }
+
+  console.log('title: %s', title);
+
   if (!page_url) {
-    const titleProp = prop['标题'];
-    const title = titleProp && titleProp.title && titleProp.title[0]
-      ? titleProp.title[0].plain_text
-      : null;
     page_url = await searchDoubanUrl(title);
     if (!page_url) {
       console.log('no url and search failed for: %s', title);
@@ -101,8 +150,8 @@ async function getNotionDBList(start_cursor) {
   if (start_cursor) {
     query_obj.start_cursor = start_cursor;
   }
-  const response = await notion.databases.query(query_obj);
-  return response;
+  const response = await notion.queryDatabase(databaseId, query_obj);
+  return response.data;
 }
 
 function getCountry($) {
@@ -193,10 +242,12 @@ async function getMovieInfo(url) {
   try {
     const html = await superagent
       .get(url)
-      .set('User-Agent', 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
+      .set('User-Agent', USER_AGENT)
       .set('Referer', 'https://movie.douban.com')
       .set('Accept-Language', 'zh-CN,zh;q=0.9')
-      .set('Cookie', DOUBAN_COOKIE);
+      .set('Cookie', DOUBAN_COOKIE)
+      .agent(proxyAgent)
+      .timeout(15000);
     if (!html) {
       return null;
     }
@@ -300,4 +351,8 @@ async function main() {
   console.log('finish all');
 }
 
-main();
+main().catch((err) => {
+  const message = err?.data?.message || err?.message || JSON.stringify(err);
+  console.error('电影刷新失败:', message);
+  process.exitCode = 1;
+});

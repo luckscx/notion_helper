@@ -27,6 +27,7 @@ pids
 
 # 配置文件（包含敏感信息）
 config.js
+douban_cookie.json
 
 # 临时文件
 .tmp/
